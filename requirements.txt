@@ -1,0 +1,2 @@
+# Mirrors manifest.json (tests/test_requirements.py holds them equal).
+modbus-connection[tmodbus]>=4.10.0

@@ -1,0 +1,4 @@
+# gitleaks configuration: the pre-push hook, check.sh and the CI jobs all use it.
+
+[extend]
+useDefault = true

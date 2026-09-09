@@ -1,0 +1,58 @@
+[
+  {
+    "label": "migration: an adopted legacy entity id must be removed",
+    "path": "custom_components/wago_879/migration.py",
+    "old": "        registry.async_remove(legacy_entity_id)\n",
+    "new": "        pass\n",
+    "tests": "the_new_sensor_takes_the_legacy_entity_id"
+  },
+  {
+    "label": "coordinator: the fourth failed poll must not keep the last values",
+    "path": "custom_components/wago_879/coordinator.py",
+    "old": "            if self.data is not None and self._failed_polls <= FAILED_POLLS_TOLERATED:\n",
+    "new": "            if self.data is not None and self._failed_polls < FAILED_POLLS_TOLERATED:\n",
+    "tests": "three_tolerated_then_a_fourth_fails"
+  },
+  {
+    "label": "registers: voltage L1 must read its own address, not L2's",
+    "path": "custom_components/wago_879/wago_879_api/registers.py",
+    "old": "    voltage_l1 = _float(0x5002)\n",
+    "new": "    voltage_l1 = _float(0x5004)\n",
+    "tests": "field_sits_at_the_manual_address"
+  },
+  {
+    "label": "migration: the user's settings must be carried onto the adopted entity",
+    "path": "custom_components/wago_879/migration.py",
+    "old": "        registry.async_update_entity(\n            created.entity_id, **_user_settings(adoption.legacy)\n        )\n",
+    "new": "        pass\n",
+    "tests": "adoption_keeps_the_settings_the_user_made"
+  },
+  {
+    "label": "migration: a restored placeholder must not count as a live entity",
+    "path": "custom_components/wago_879/migration.py",
+    "old": "        if state is not None and not state.attributes.get(\n            EntityStateAttribute.RESTORED\n        ):\n",
+    "new": "        if state is not None:\n",
+    "tests": "only_a_state_a_platform_serves_refuses_adoption"
+  },
+  {
+    "label": "migration: an unavailable state without the marker must still refuse",
+    "path": "custom_components/wago_879/migration.py",
+    "old": "        if state is not None and not state.attributes.get(\n            EntityStateAttribute.RESTORED\n        ):\n",
+    "new": "        if state is not None and state.state != \"unavailable\":\n",
+    "tests": "only_a_state_a_platform_serves_refuses_adoption"
+  },
+  {
+    "label": "logging: an unreachable meter must not be logged as an error",
+    "path": "custom_components/wago_879/logging_policy.py",
+    "old": "UNREACHABLE_ERRORS = (ModbusConnectionError,)\n",
+    "new": "UNREACHABLE_ERRORS = ()\n",
+    "tests": "an_unreachable_meter_is_not_logged_as_an_error"
+  },
+  {
+    "label": "logging: a meter that answers and fails must stay an error",
+    "path": "custom_components/wago_879/logging_policy.py",
+    "old": "            isinstance(argument, DeviceUnreachable) for argument in record.args or ()\n",
+    "new": "            isinstance(argument, Exception) for argument in record.args or ()\n",
+    "tests": "a_refused_read_is_still_an_error"
+  }
+]

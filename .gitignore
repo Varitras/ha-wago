@@ -1,0 +1,34 @@
+# artifacts
+__pycache__
+.pytest*
+*.egg-info
+*/build/*
+*/dist/*
+
+
+# misc
+.coverage
+coverage.xml
+.ruff_cache
+
+# VS Code
+.vscode
+.vs
+.venv
+.cache
+
+# Home Assistant configuration
+configuration.yaml
+automations.yaml
+.HA_VERSION
+scenes.yaml
+scripts.yaml
+secrets.yaml
+.storage/*
+home-assistant.log
+home-assistant_v2.db
+home-assistant.log.1
+home-assistant.log.fault
+home-assistant_v2.db-shm
+home-assistant_v2.db-wal
+

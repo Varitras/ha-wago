@@ -1,0 +1,378 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Adresse des 879-9000 Modbus-TCP-Moduls.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus-Unit-ID des Zählers",
+          "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
+          "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        }
+      },
+      "reconfigure": {
+        "description": "Moduladresse aktualisieren.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus-Unit-ID des Zählers"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Der Zähler antwortet nicht",
+      "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
+      "invalid_host": "Hostname oder IP-Adresse eingeben"
+    },
+    "abort": {
+      "already_configured": "Dieser Zähler ist bereits eingerichtet",
+      "unique_id_mismatch": "Unter dieser Adresse hat ein anderer Zähler geantwortet; der Eintrag wurde nicht geändert.",
+      "reconfigure_successful": "Konfiguration aktualisiert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
+          "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "voltage_avg": {
+        "name": "Spannung Durchschnitt"
+      },
+      "voltage_l1": {
+        "name": "Spannung L1"
+      },
+      "voltage_l2": {
+        "name": "Spannung L2"
+      },
+      "voltage_l3": {
+        "name": "Spannung L3"
+      },
+      "frequency": {
+        "name": "Frequenz"
+      },
+      "current_avg": {
+        "name": "Strom Durchschnitt"
+      },
+      "current_l1": {
+        "name": "Strom L1"
+      },
+      "current_l2": {
+        "name": "Strom L2"
+      },
+      "current_l3": {
+        "name": "Strom L3"
+      },
+      "active_power_total": {
+        "name": "Wirkleistung gesamt"
+      },
+      "active_power_l1": {
+        "name": "Wirkleistung L1"
+      },
+      "active_power_l2": {
+        "name": "Wirkleistung L2"
+      },
+      "active_power_l3": {
+        "name": "Wirkleistung L3"
+      },
+      "reactive_power_total": {
+        "name": "Blindleistung gesamt"
+      },
+      "reactive_power_l1": {
+        "name": "Blindleistung L1"
+      },
+      "reactive_power_l2": {
+        "name": "Blindleistung L2"
+      },
+      "reactive_power_l3": {
+        "name": "Blindleistung L3"
+      },
+      "apparent_power_total": {
+        "name": "Scheinleistung gesamt"
+      },
+      "apparent_power_l1": {
+        "name": "Scheinleistung L1"
+      },
+      "apparent_power_l2": {
+        "name": "Scheinleistung L2"
+      },
+      "apparent_power_l3": {
+        "name": "Scheinleistung L3"
+      },
+      "power_factor_total": {
+        "name": "Leistungsfaktor gesamt"
+      },
+      "power_factor_l1": {
+        "name": "Leistungsfaktor L1"
+      },
+      "power_factor_l2": {
+        "name": "Leistungsfaktor L2"
+      },
+      "power_factor_l3": {
+        "name": "Leistungsfaktor L3"
+      },
+      "voltage_l1_l2": {
+        "name": "Spannung L1-L2"
+      },
+      "voltage_l1_l3": {
+        "name": "Spannung L1-L3"
+      },
+      "voltage_l2_l3": {
+        "name": "Spannung L2-L3"
+      },
+      "active_energy_total": {
+        "name": "Wirkenergie gesamt"
+      },
+      "active_energy_total_t1": {
+        "name": "Wirkenergie gesamt T1"
+      },
+      "active_energy_total_t2": {
+        "name": "Wirkenergie gesamt T2"
+      },
+      "active_energy_total_l1": {
+        "name": "Wirkenergie gesamt L1"
+      },
+      "active_energy_total_l2": {
+        "name": "Wirkenergie gesamt L2"
+      },
+      "active_energy_total_l3": {
+        "name": "Wirkenergie gesamt L3"
+      },
+      "active_energy_import": {
+        "name": "Wirkenergie Bezug"
+      },
+      "active_energy_import_t1": {
+        "name": "Wirkenergie Bezug T1"
+      },
+      "active_energy_import_t2": {
+        "name": "Wirkenergie Bezug T2"
+      },
+      "active_energy_import_l1": {
+        "name": "Wirkenergie Bezug L1"
+      },
+      "active_energy_import_l2": {
+        "name": "Wirkenergie Bezug L2"
+      },
+      "active_energy_import_l3": {
+        "name": "Wirkenergie Bezug L3"
+      },
+      "active_energy_export": {
+        "name": "Wirkenergie Lieferung"
+      },
+      "active_energy_export_t1": {
+        "name": "Wirkenergie Lieferung T1"
+      },
+      "active_energy_export_t2": {
+        "name": "Wirkenergie Lieferung T2"
+      },
+      "active_energy_export_l1": {
+        "name": "Wirkenergie Lieferung L1"
+      },
+      "active_energy_export_l2": {
+        "name": "Wirkenergie Lieferung L2"
+      },
+      "active_energy_export_l3": {
+        "name": "Wirkenergie Lieferung L3"
+      },
+      "reactive_energy_total": {
+        "name": "Blindenergie gesamt"
+      },
+      "reactive_energy_total_t1": {
+        "name": "Blindenergie gesamt T1"
+      },
+      "reactive_energy_total_t2": {
+        "name": "Blindenergie gesamt T2"
+      },
+      "reactive_energy_total_l1": {
+        "name": "Blindenergie gesamt L1"
+      },
+      "reactive_energy_total_l2": {
+        "name": "Blindenergie gesamt L2"
+      },
+      "reactive_energy_total_l3": {
+        "name": "Blindenergie gesamt L3"
+      },
+      "reactive_energy_import": {
+        "name": "Blindenergie Bezug"
+      },
+      "reactive_energy_import_t1": {
+        "name": "Blindenergie Bezug T1"
+      },
+      "reactive_energy_import_t2": {
+        "name": "Blindenergie Bezug T2"
+      },
+      "reactive_energy_import_l1": {
+        "name": "Blindenergie Bezug L1"
+      },
+      "reactive_energy_import_l2": {
+        "name": "Blindenergie Bezug L2"
+      },
+      "reactive_energy_import_l3": {
+        "name": "Blindenergie Bezug L3"
+      },
+      "reactive_energy_export": {
+        "name": "Blindenergie Lieferung"
+      },
+      "reactive_energy_export_t1": {
+        "name": "Blindenergie Lieferung T1"
+      },
+      "reactive_energy_export_t2": {
+        "name": "Blindenergie Lieferung T2"
+      },
+      "reactive_energy_export_l1": {
+        "name": "Blindenergie Lieferung L1"
+      },
+      "reactive_energy_export_l2": {
+        "name": "Blindenergie Lieferung L2"
+      },
+      "reactive_energy_export_l3": {
+        "name": "Blindenergie Lieferung L3"
+      },
+      "tariff": {
+        "name": "Tarif"
+      },
+      "day_energy": {
+        "name": "Tagesregister"
+      },
+      "active_energy_total_t3": {
+        "name": "Wirkenergie gesamt T3"
+      },
+      "active_energy_total_t4": {
+        "name": "Wirkenergie gesamt T4"
+      },
+      "active_energy_import_t3": {
+        "name": "Wirkenergie Bezug T3"
+      },
+      "active_energy_import_t4": {
+        "name": "Wirkenergie Bezug T4"
+      },
+      "active_energy_export_t3": {
+        "name": "Wirkenergie Lieferung T3"
+      },
+      "active_energy_export_t4": {
+        "name": "Wirkenergie Lieferung T4"
+      },
+      "reactive_energy_total_t3": {
+        "name": "Blindenergie gesamt T3"
+      },
+      "reactive_energy_total_t4": {
+        "name": "Blindenergie gesamt T4"
+      },
+      "reactive_energy_import_t3": {
+        "name": "Blindenergie Bezug T3"
+      },
+      "reactive_energy_import_t4": {
+        "name": "Blindenergie Bezug T4"
+      },
+      "reactive_energy_export_t3": {
+        "name": "Blindenergie Lieferung T3"
+      },
+      "reactive_energy_export_t4": {
+        "name": "Blindenergie Lieferung T4"
+      },
+      "reactive_energy_q1": {
+        "name": "Blindenergie Q1"
+      },
+      "reactive_energy_q1_t1": {
+        "name": "Blindenergie Q1 T1"
+      },
+      "reactive_energy_q1_t2": {
+        "name": "Blindenergie Q1 T2"
+      },
+      "reactive_energy_q1_t3": {
+        "name": "Blindenergie Q1 T3"
+      },
+      "reactive_energy_q1_t4": {
+        "name": "Blindenergie Q1 T4"
+      },
+      "reactive_energy_q2": {
+        "name": "Blindenergie Q2"
+      },
+      "reactive_energy_q2_t1": {
+        "name": "Blindenergie Q2 T1"
+      },
+      "reactive_energy_q2_t2": {
+        "name": "Blindenergie Q2 T2"
+      },
+      "reactive_energy_q2_t3": {
+        "name": "Blindenergie Q2 T3"
+      },
+      "reactive_energy_q2_t4": {
+        "name": "Blindenergie Q2 T4"
+      },
+      "reactive_energy_q3": {
+        "name": "Blindenergie Q3"
+      },
+      "reactive_energy_q3_t1": {
+        "name": "Blindenergie Q3 T1"
+      },
+      "reactive_energy_q3_t2": {
+        "name": "Blindenergie Q3 T2"
+      },
+      "reactive_energy_q3_t3": {
+        "name": "Blindenergie Q3 T3"
+      },
+      "reactive_energy_q3_t4": {
+        "name": "Blindenergie Q3 T4"
+      },
+      "reactive_energy_q4": {
+        "name": "Blindenergie Q4"
+      },
+      "reactive_energy_q4_t1": {
+        "name": "Blindenergie Q4 T1"
+      },
+      "reactive_energy_q4_t2": {
+        "name": "Blindenergie Q4 T2"
+      },
+      "reactive_energy_q4_t3": {
+        "name": "Blindenergie Q4 T3"
+      },
+      "reactive_energy_q4_t4": {
+        "name": "Blindenergie Q4 T4"
+      },
+      "day_energy_l1": {
+        "name": "Tagesregister L1"
+      },
+      "day_energy_l2": {
+        "name": "Tagesregister L2"
+      },
+      "day_energy_l3": {
+        "name": "Tagesregister L3"
+      },
+      "modbus_id": {
+        "name": "Modbus-ID"
+      },
+      "meter_amperes": {
+        "name": "Nennstrom"
+      },
+      "power_down_counter": {
+        "name": "Spannungsausfälle"
+      },
+      "current_quadrant": {
+        "name": "Quadrant"
+      },
+      "quadrant_l1": {
+        "name": "Quadrant L1"
+      },
+      "quadrant_l2": {
+        "name": "Quadrant L2"
+      },
+      "quadrant_l3": {
+        "name": "Quadrant L3"
+      },
+      "ct_ratio_primary": {
+        "name": "Wandlerverhältnis primär"
+      },
+      "ct_ratio_secondary": {
+        "name": "Wandlerverhältnis sekundär"
+      }
+    }
+  }
+}

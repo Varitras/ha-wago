@@ -1,0 +1,192 @@
+name: Test
+
+on:
+  push:
+    # A negative pattern, not branches-ignore: GitHub rejects a workflow
+    # that combines the two filters on one event.
+    branches: ["**", "!dependabot/**"]
+  pull_request:
+
+# This workflow only checks out and runs tests, so read access to the repo
+# contents is all it needs.
+permissions:
+  contents: read
+
+# A push on top of a running push cancels it; the older result would be
+# stale by the time it arrived.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # Its own job, not a step of the test job: a formatting complaint and a
+    # failing test are different news, and a red cross that could mean either
+    # gets read as neither.
+    name: ruff
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      # Pinned. An unpinned install means the CI enforces whatever Ruff
+      # decided this week, and a release that reflows differently would fail
+      # a build nobody changed. Raise it deliberately, together with the local
+      # run.
+      - name: Install Ruff
+        run: pip install "ruff==0.16.5"
+      - name: Lint
+        run: ruff check .
+      # The formatting only stays put if something checks it.
+      - name: Check formatting
+        run: ruff format --check .
+
+  pip-audit:
+    # The runtime requirements against the vulnerability databases. Only the
+    # direct requirements and what they pull in - Home Assistant's own
+    # environment is Home Assistant's to audit.
+    name: pip-audit
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install pip-audit
+        run: pip install "pip-audit==2.10.1"
+      - name: Audit the runtime requirements
+        run: pip-audit -r requirements.txt --strict
+
+  gitleaks:
+    # The commits of this push - the action scans the push range on a push
+    # event. The pre-push hook scans every commit this fork added, but it is
+    # per clone and opt-in, so CI has to look too.
+    name: gitleaks
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Named explicitly: the action does not pick the config up from
+          # the checkout on its own, and would otherwise scan with settings
+          # neither the hook nor check.sh use.
+          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
+
+  mypy:
+    name: mypy
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      # Home Assistant has to be importable for the checked modules' own
+      # imports - and it has to be the SAME release the test job runs, or this
+      # job vouches for a type surface nothing else touches. Both go through
+      # the same resolver. Mypy is pinned for the reason Ruff is.
+      - name: Resolve the plugin version to install
+        run: |
+          pip install packaging
+          python .github/scripts/resolve_phcc.py latest-stable-ha \
+            | tee -a "$GITHUB_ENV"
+      - name: Install dependencies
+        run: |
+          pip install "$PHCC_SPEC" -r requirements.txt
+          pip install "mypy==2.3.1"
+      # Same environment as the test job, for the same reason the plugin
+      # version is: a checker looking at a different Modbus library than the
+      # tests run against vouches for a type surface nothing exercises.
+      - name: Install core's Modbus requirements
+        run: python .github/scripts/install_core_modbus_requirements.py
+      - name: Type check
+        run: mypy
+
+  pytest:
+    # Two ends of the supported range, because they catch opposite mistakes.
+    #
+    # "minimum" catches using an API that does not exist yet on the version
+    # hacs.json declares. "current" catches the opposite: an API that has since
+    # been REMOVED. Its plugin version is resolved at run time to the newest
+    # release that pins a FINAL Home Assistant - see
+    # .github/scripts/resolve_phcc.py for why an unpinned install silently
+    # tests a beta instead.
+    name: pytest (${{ matrix.name }})
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 45
+    strategy:
+      # Both results matter; a failure at one end must not hide the other.
+      fail-fast: false
+      matrix:
+        include:
+          - name: "minimum HA 2026.9"
+            python-version: "3.14"
+            # This job is the one with a version it MUST be running; the
+            # current job has no fixed expectation to check against.
+            check-declared-minimum: true
+            # Pinned to the plugin release that ships the Home Assistant
+            # feature release hacs.json declares as the minimum. Raise both
+            # together, never one alone.
+            phcc: "pytest-homeassistant-custom-component==0.13.363"
+          - name: "current HA"
+            python-version: "3.14"
+            # Resolved by the step below, not a literal requirement.
+            phcc: "latest-stable-ha"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Resolve the plugin version to install
+        # tee, not a plain redirect: the chosen version has to be visible in
+        # the log too, or a job that disagrees with a local run is guesswork.
+        run: |
+          pip install packaging
+          python .github/scripts/resolve_phcc.py "${{ matrix.phcc }}" | tee -a "$GITHUB_ENV"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pytest-timeout by name: these jobs deliberately do not install
+          # requirements_test.txt, so nothing else here would bring it - and
+          # the timeout that stops a hung run is exactly what must not depend
+          # on some other package still happening to pull it in.
+          pip install "$PHCC_SPEC" pytest-timeout -r requirements.txt
+      # Importing this integration imports core's modbus, which imports
+      # pymodbus at module level - and nothing above installs pymodbus, so
+      # collection dies before a single test runs. Read from the installed
+      # manifest, so both matrix entries get the versions THEIR Home Assistant
+      # ships. See the script for why a second version list here would rot.
+      - name: Install core's Modbus requirements
+        run: python .github/scripts/install_core_modbus_requirements.py
+      - name: Show the Home Assistant version under test
+        run: python -c "from homeassistant.const import __version__; print(__version__)"
+      - name: The minimum job must run the version hacs.json declares
+        if: matrix.check-declared-minimum
+        run: python .github/scripts/check_min_ha.py
+      # -m "" cancels the `-m "not e2e"` default from pyproject.toml, so the
+      # slow end-to-end tests against a real Home Assistant run here.
+      - name: Run test suite
+        run: pytest tests/ -q -m "" --cov=custom_components/wago_879 --cov-report=term:skip-covered --cov-fail-under=97
+      # A green suite says the tests pass, not that they would catch anything.
+      # Only on one job: the answer does not depend on the Home Assistant
+      # version, and the mutations edit files in the workspace.
+      - name: Verify the tests actually catch a broken fix
+        if: matrix.name == 'current HA'
+        run: python .github/scripts/mutate.py .github/mutations/plan.json

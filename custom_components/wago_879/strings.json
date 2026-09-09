@@ -1,0 +1,378 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Address of the 879-9000 Modbus TCP module.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus unit id of the meter",
+          "measurement_interval": "Poll interval for measurements (seconds)",
+          "energy_interval": "Poll interval for energy counters (seconds)"
+        }
+      },
+      "reconfigure": {
+        "description": "Update the module address.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus unit id of the meter"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The meter did not answer",
+      "link_settings_clash": "Another integration already uses this address with different link settings",
+      "invalid_host": "Enter a host name or IP address"
+    },
+    "abort": {
+      "already_configured": "This meter is already configured",
+      "unique_id_mismatch": "A different meter answered at this address; the entry was not changed.",
+      "reconfigure_successful": "Configuration updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "measurement_interval": "Poll interval for measurements (seconds)",
+          "energy_interval": "Poll interval for energy counters (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "voltage_avg": {
+        "name": "Voltage average"
+      },
+      "voltage_l1": {
+        "name": "Voltage L1"
+      },
+      "voltage_l2": {
+        "name": "Voltage L2"
+      },
+      "voltage_l3": {
+        "name": "Voltage L3"
+      },
+      "frequency": {
+        "name": "Frequency"
+      },
+      "current_avg": {
+        "name": "Current average"
+      },
+      "current_l1": {
+        "name": "Current L1"
+      },
+      "current_l2": {
+        "name": "Current L2"
+      },
+      "current_l3": {
+        "name": "Current L3"
+      },
+      "active_power_total": {
+        "name": "Active power total"
+      },
+      "active_power_l1": {
+        "name": "Active power L1"
+      },
+      "active_power_l2": {
+        "name": "Active power L2"
+      },
+      "active_power_l3": {
+        "name": "Active power L3"
+      },
+      "reactive_power_total": {
+        "name": "Reactive power total"
+      },
+      "reactive_power_l1": {
+        "name": "Reactive power L1"
+      },
+      "reactive_power_l2": {
+        "name": "Reactive power L2"
+      },
+      "reactive_power_l3": {
+        "name": "Reactive power L3"
+      },
+      "apparent_power_total": {
+        "name": "Apparent power total"
+      },
+      "apparent_power_l1": {
+        "name": "Apparent power L1"
+      },
+      "apparent_power_l2": {
+        "name": "Apparent power L2"
+      },
+      "apparent_power_l3": {
+        "name": "Apparent power L3"
+      },
+      "power_factor_total": {
+        "name": "Power factor total"
+      },
+      "power_factor_l1": {
+        "name": "Power factor L1"
+      },
+      "power_factor_l2": {
+        "name": "Power factor L2"
+      },
+      "power_factor_l3": {
+        "name": "Power factor L3"
+      },
+      "voltage_l1_l2": {
+        "name": "Voltage L1-L2"
+      },
+      "voltage_l1_l3": {
+        "name": "Voltage L1-L3"
+      },
+      "voltage_l2_l3": {
+        "name": "Voltage L2-L3"
+      },
+      "active_energy_total": {
+        "name": "Active energy total"
+      },
+      "active_energy_total_t1": {
+        "name": "Active energy total T1"
+      },
+      "active_energy_total_t2": {
+        "name": "Active energy total T2"
+      },
+      "active_energy_total_l1": {
+        "name": "Active energy total L1"
+      },
+      "active_energy_total_l2": {
+        "name": "Active energy total L2"
+      },
+      "active_energy_total_l3": {
+        "name": "Active energy total L3"
+      },
+      "active_energy_import": {
+        "name": "Active energy import"
+      },
+      "active_energy_import_t1": {
+        "name": "Active energy import T1"
+      },
+      "active_energy_import_t2": {
+        "name": "Active energy import T2"
+      },
+      "active_energy_import_l1": {
+        "name": "Active energy import L1"
+      },
+      "active_energy_import_l2": {
+        "name": "Active energy import L2"
+      },
+      "active_energy_import_l3": {
+        "name": "Active energy import L3"
+      },
+      "active_energy_export": {
+        "name": "Active energy export"
+      },
+      "active_energy_export_t1": {
+        "name": "Active energy export T1"
+      },
+      "active_energy_export_t2": {
+        "name": "Active energy export T2"
+      },
+      "active_energy_export_l1": {
+        "name": "Active energy export L1"
+      },
+      "active_energy_export_l2": {
+        "name": "Active energy export L2"
+      },
+      "active_energy_export_l3": {
+        "name": "Active energy export L3"
+      },
+      "reactive_energy_total": {
+        "name": "Reactive energy total"
+      },
+      "reactive_energy_total_t1": {
+        "name": "Reactive energy total T1"
+      },
+      "reactive_energy_total_t2": {
+        "name": "Reactive energy total T2"
+      },
+      "reactive_energy_total_l1": {
+        "name": "Reactive energy total L1"
+      },
+      "reactive_energy_total_l2": {
+        "name": "Reactive energy total L2"
+      },
+      "reactive_energy_total_l3": {
+        "name": "Reactive energy total L3"
+      },
+      "reactive_energy_import": {
+        "name": "Reactive energy import"
+      },
+      "reactive_energy_import_t1": {
+        "name": "Reactive energy import T1"
+      },
+      "reactive_energy_import_t2": {
+        "name": "Reactive energy import T2"
+      },
+      "reactive_energy_import_l1": {
+        "name": "Reactive energy import L1"
+      },
+      "reactive_energy_import_l2": {
+        "name": "Reactive energy import L2"
+      },
+      "reactive_energy_import_l3": {
+        "name": "Reactive energy import L3"
+      },
+      "reactive_energy_export": {
+        "name": "Reactive energy export"
+      },
+      "reactive_energy_export_t1": {
+        "name": "Reactive energy export T1"
+      },
+      "reactive_energy_export_t2": {
+        "name": "Reactive energy export T2"
+      },
+      "reactive_energy_export_l1": {
+        "name": "Reactive energy export L1"
+      },
+      "reactive_energy_export_l2": {
+        "name": "Reactive energy export L2"
+      },
+      "reactive_energy_export_l3": {
+        "name": "Reactive energy export L3"
+      },
+      "tariff": {
+        "name": "Tariff"
+      },
+      "day_energy": {
+        "name": "Daily energy"
+      },
+      "active_energy_total_t3": {
+        "name": "Active energy total T3"
+      },
+      "active_energy_total_t4": {
+        "name": "Active energy total T4"
+      },
+      "active_energy_import_t3": {
+        "name": "Active energy import T3"
+      },
+      "active_energy_import_t4": {
+        "name": "Active energy import T4"
+      },
+      "active_energy_export_t3": {
+        "name": "Active energy export T3"
+      },
+      "active_energy_export_t4": {
+        "name": "Active energy export T4"
+      },
+      "reactive_energy_total_t3": {
+        "name": "Reactive energy total T3"
+      },
+      "reactive_energy_total_t4": {
+        "name": "Reactive energy total T4"
+      },
+      "reactive_energy_import_t3": {
+        "name": "Reactive energy import T3"
+      },
+      "reactive_energy_import_t4": {
+        "name": "Reactive energy import T4"
+      },
+      "reactive_energy_export_t3": {
+        "name": "Reactive energy export T3"
+      },
+      "reactive_energy_export_t4": {
+        "name": "Reactive energy export T4"
+      },
+      "reactive_energy_q1": {
+        "name": "Reactive energy Q1"
+      },
+      "reactive_energy_q1_t1": {
+        "name": "Reactive energy Q1 T1"
+      },
+      "reactive_energy_q1_t2": {
+        "name": "Reactive energy Q1 T2"
+      },
+      "reactive_energy_q1_t3": {
+        "name": "Reactive energy Q1 T3"
+      },
+      "reactive_energy_q1_t4": {
+        "name": "Reactive energy Q1 T4"
+      },
+      "reactive_energy_q2": {
+        "name": "Reactive energy Q2"
+      },
+      "reactive_energy_q2_t1": {
+        "name": "Reactive energy Q2 T1"
+      },
+      "reactive_energy_q2_t2": {
+        "name": "Reactive energy Q2 T2"
+      },
+      "reactive_energy_q2_t3": {
+        "name": "Reactive energy Q2 T3"
+      },
+      "reactive_energy_q2_t4": {
+        "name": "Reactive energy Q2 T4"
+      },
+      "reactive_energy_q3": {
+        "name": "Reactive energy Q3"
+      },
+      "reactive_energy_q3_t1": {
+        "name": "Reactive energy Q3 T1"
+      },
+      "reactive_energy_q3_t2": {
+        "name": "Reactive energy Q3 T2"
+      },
+      "reactive_energy_q3_t3": {
+        "name": "Reactive energy Q3 T3"
+      },
+      "reactive_energy_q3_t4": {
+        "name": "Reactive energy Q3 T4"
+      },
+      "reactive_energy_q4": {
+        "name": "Reactive energy Q4"
+      },
+      "reactive_energy_q4_t1": {
+        "name": "Reactive energy Q4 T1"
+      },
+      "reactive_energy_q4_t2": {
+        "name": "Reactive energy Q4 T2"
+      },
+      "reactive_energy_q4_t3": {
+        "name": "Reactive energy Q4 T3"
+      },
+      "reactive_energy_q4_t4": {
+        "name": "Reactive energy Q4 T4"
+      },
+      "day_energy_l1": {
+        "name": "Daily energy L1"
+      },
+      "day_energy_l2": {
+        "name": "Daily energy L2"
+      },
+      "day_energy_l3": {
+        "name": "Daily energy L3"
+      },
+      "modbus_id": {
+        "name": "Modbus ID"
+      },
+      "meter_amperes": {
+        "name": "Meter rated current"
+      },
+      "power_down_counter": {
+        "name": "Power outages"
+      },
+      "current_quadrant": {
+        "name": "Current quadrant"
+      },
+      "quadrant_l1": {
+        "name": "Quadrant L1"
+      },
+      "quadrant_l2": {
+        "name": "Quadrant L2"
+      },
+      "quadrant_l3": {
+        "name": "Quadrant L3"
+      },
+      "ct_ratio_primary": {
+        "name": "CT ratio primary"
+      },
+      "ct_ratio_secondary": {
+        "name": "CT ratio secondary"
+      }
+    }
+  }
+}

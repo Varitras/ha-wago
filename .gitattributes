@@ -1,0 +1,5 @@
+# LF throughout the tree: git otherwise warns on every checkout of a file it
+# would convert, and shell scripts are read by sh - a CRLF checkout on Windows
+# would make every line end in a stray  and the script would fail to run.
+* text=auto eol=lf
+*.sh text eol=lf
