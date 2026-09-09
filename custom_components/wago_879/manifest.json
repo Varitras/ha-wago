@@ -1,14 +1,22 @@
 {
   "domain": "wago_879",
   "name": "WAGO 879 Energy Meter",
-  "codeowners": ["@Varitras"],
+  "codeowners": [
+    "@Varitras"
+  ],
   "config_flow": true,
-  "dependencies": ["modbus"],
+  "dependencies": [
+    "modbus"
+  ],
   "documentation": "https://github.com/Varitras/ha-wago",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Varitras/ha-wago/issues",
-  "loggers": ["custom_components.wago_879"],
-  "requirements": ["modbus-connection[tmodbus]>=4.10.0"],
-  "version": "0.1.0"
+  "loggers": [
+    "custom_components.wago_879"
+  ],
+  "requirements": [
+    "modbus-connection[tmodbus]>=4.10.0"
+  ],
+  "version": "0.1.0b1"
 }
