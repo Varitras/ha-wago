@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 SERIAL = "00123456"
 SERIAL_TAIL = "3456"
-DEVICE_NAME = f"WAGO 879-3000 {SERIAL_TAIL}"
+DEVICE_NAME = f"WAGO {SERIAL_TAIL}"
 BASE_DATA = {
     CONF_HOST: "192.0.2.10",
     CONF_PORT: 502,
@@ -103,7 +103,7 @@ async def test_no_entity_is_named_after_the_meters_address(hass):
 
     registry = er.async_get(hass)
     voltage = registry.async_get_entity_id("sensor", DOMAIN, f"{SERIAL}_voltage_l1")
-    assert voltage == f"sensor.wago_879_3000_{SERIAL_TAIL}_voltage_l1"
+    assert voltage == f"sensor.wago_{SERIAL_TAIL}_voltage_l1"
     assert hass.states.get(voltage).attributes["friendly_name"] == (
         f"{DEVICE_NAME} Voltage L1"
     )

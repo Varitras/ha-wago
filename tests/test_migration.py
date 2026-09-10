@@ -145,7 +145,7 @@ async def test_without_legacy_entries_setup_is_a_plain_setup(hass):
     await hass.async_block_till_done()
 
     assert er.async_get(hass).async_get_entity_id("sensor", DOMAIN, NEW_UNIQUE_ID) == (
-        f"sensor.wago_879_3000_{SERIAL[-4:]}_active_energy_total"
+        f"sensor.wago_{SERIAL[-4:]}_active_energy_total"
     )
 
 

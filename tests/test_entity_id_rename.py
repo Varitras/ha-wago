@@ -48,7 +48,7 @@ FREQUENCY_UNIQUE_ID = f"{SERIAL}_frequency"
 FREQUENCY_NAME = "Frequency"
 # What the device without a name produced: the entry title is the host.
 HOST_ENTITY_ID = "sensor.192_0_2_10_frequency"
-DEVICE_ENTITY_ID = "sensor.wago_879_3000_3456_frequency"
+DEVICE_ENTITY_ID = "sensor.wago_3456_frequency"
 
 ENERGY_UNIQUE_ID = f"{SERIAL}_active_energy_total"
 ENERGY_NAME = "Active energy total"
@@ -155,7 +155,7 @@ async def test_statistics_survive_the_rename(recorder_mock, hass):
     await _setup(hass, entry)
     await get_instance(hass).async_block_till_done()
 
-    renamed = "sensor.wago_879_3000_3456_active_energy_total"
+    renamed = "sensor.wago_3456_active_energy_total"
     # Without this the test would also pass while nothing was renamed at all.
     assert _entity_id(hass, ENERGY_UNIQUE_ID) == renamed
     ids = await get_instance(hass).async_add_executor_job(
