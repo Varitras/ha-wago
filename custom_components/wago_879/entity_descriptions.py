@@ -118,6 +118,22 @@ def _is_split_counter(field: str) -> bool:
     return field.endswith(TARIFFS) or any(f"_{q}" in field for q in QUADRANTS)
 
 
+def _is_directed(field: str) -> bool:
+    """Whether the register counts in one direction only.
+
+    Import, export and the four quadrants each accumulate their own share and
+    only ever rise. Every other energy register holds import minus export -
+    measured on a meter: reactive_energy_total -1206.637 against import 652.664
+    and export 1859.300 - so it falls, goes negative, and is not a rising
+    counter however much its name says "total".
+    """
+    return (
+        "import" in field
+        or "export" in field
+        or any(f"_{q}" in field for q in QUADRANTS)
+    )
+
+
 def _energy(field: str) -> WagoSensorDescription:
     if field == "tariff":
         return WagoSensorDescription(
@@ -140,7 +156,9 @@ def _energy(field: str) -> WagoSensorDescription:
             if reactive
             else UnitOfEnergy.KILO_WATT_HOUR
         ),
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL_INCREASING
+        if _is_directed(field)
+        else SensorStateClass.TOTAL,
         suggested_display_precision=3,
         entity_registry_enabled_default=enabled,
     )

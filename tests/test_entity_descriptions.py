@@ -15,6 +15,7 @@ from custom_components.wago_879.entity_descriptions import (
     OMITTED_FIELDS,
     SENSOR_DESCRIPTIONS,
     Block,
+    WagoSensorDescription,
 )
 from custom_components.wago_879.wago_879_api.registers import (
     ENERGY_FIELDS,
@@ -96,7 +97,13 @@ def test_the_thirteen_legacy_ids_map_to_their_fields():
 
 def test_legacy_sensors_are_enabled_and_keep_their_units():
     """kW and kWh, as the YAML declared them - a unit change would rescale
-    the statistics Home Assistant already holds."""
+    the statistics Home Assistant already holds.
+
+    The state class is deliberately not pinned here: `active_energy_total` is a
+    balance of import against export, so it belongs to TOTAL rather than
+    TOTAL_INCREASING. That changes how the recorder reads new values and leaves
+    the recorded ones untouched, while a unit change would not.
+    """
     adopted = set(LEGACY_UNIQUE_IDS.values())
     for description in SENSOR_DESCRIPTIONS:
         if description.key not in adopted:
@@ -106,7 +113,6 @@ def test_legacy_sensors_are_enabled_and_keep_their_units():
             assert description.native_unit_of_measurement == "kW"
         if description.device_class is SensorDeviceClass.ENERGY:
             assert description.native_unit_of_measurement == "kWh"
-            assert description.state_class is SensorStateClass.TOTAL_INCREASING
 
 
 def test_tariff_and_quadrant_counters_are_disabled_by_default():
@@ -148,3 +154,34 @@ def test_legacy_ids_pin_to_the_registers_they_replace():
         field = LEGACY_UNIQUE_IDS[legacy_id]
         component = field_component[field]
         assert address_of(component, field) == expected_address, legacy_id
+
+
+# The meter's `*_total` registers hold import minus export, so they fall and go
+# negative - measured on a live meter: reactive_energy_total -1206.637 with
+# import 652.664 and export 1859.300. `total_increasing` promises a counter that
+# only rises; Home Assistant's recorder rejects a negative state under it and
+# tells the user to file a bug. Directed registers (import, export, quadrants)
+# do only rise and keep that class.
+NETTED = ("active_energy_total", "reactive_energy_total", "reactive_energy_total_l2")
+DIRECTED = (
+    "active_energy_import",
+    "reactive_energy_export",
+    "reactive_energy_q1",
+    "reactive_energy_q4_t2",
+)
+
+
+def _by_key(key: str) -> WagoSensorDescription:
+    return next(d for d in SENSOR_DESCRIPTIONS if d.key == key)
+
+
+@pytest.mark.parametrize("key", NETTED)
+def test_a_netted_counter_may_fall_and_is_not_total_increasing(key):
+    """A balance of import against export is not a rising counter."""
+    assert _by_key(key).state_class is SensorStateClass.TOTAL
+
+
+@pytest.mark.parametrize("key", DIRECTED)
+def test_a_directed_counter_stays_total_increasing(key):
+    """Import, export and the quadrants only ever rise."""
+    assert _by_key(key).state_class is SensorStateClass.TOTAL_INCREASING
