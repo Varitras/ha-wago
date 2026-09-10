@@ -14,9 +14,22 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .entity_descriptions import SENSOR_DESCRIPTIONS, WagoSensorDescription
+from .logging_policy import identifier_tail
 
 MANUFACTURER = "WAGO"
 MODEL = "879-3000"
+
+
+def device_name(serial: str) -> str:
+    """Name the device after the meter, never after where it is plugged in.
+
+    With `has_entity_name` this name is the first half of every entity id and
+    friendly name the integration creates. Home Assistant falls back to the config entry title for a device without a
+    name, and that title is the meter's address, so entity ids would be built
+    from an address that changes whenever the meter moves. The serial tail
+    keeps two meters of one installation apart.
+    """
+    return f"{MANUFACTURER} {MODEL} {identifier_tail(serial)}"
 
 
 def _version(identity: dict[str, Any], field: str) -> str | None:
@@ -29,6 +42,7 @@ def device_info(serial: str, identity: dict[str, Any]) -> DeviceInfo:
     """The device card: serial, firmware and hardware version."""
     return DeviceInfo(
         identifiers={(DOMAIN, serial)},
+        name=device_name(serial),
         manufacturer=MANUFACTURER,
         model=MODEL,
         serial_number=serial,

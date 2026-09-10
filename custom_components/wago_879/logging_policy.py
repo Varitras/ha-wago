@@ -29,11 +29,20 @@ IDENTIFIER_TAIL_LENGTH = 4
 MASK_PREFIX = "..."
 
 
+def identifier_tail(identifier: str) -> str:
+    """The part of an identifier that may be shown without the mask prefix.
+
+    The device name needs the same tail as a log line, but not the leading
+    dots, and how much of an identifier is safe to show is one decision.
+    """
+    return identifier[-IDENTIFIER_TAIL_LENGTH:]
+
+
 def mask(identifier: str) -> str:
     """Shorten a host or a serial number for a log line or a UI message."""
     if len(identifier) <= IDENTIFIER_TAIL_LENGTH:
         return MASK_PREFIX
-    return f"{MASK_PREFIX}{identifier[-IDENTIFIER_TAIL_LENGTH:]}"
+    return f"{MASK_PREFIX}{identifier_tail(identifier)}"
 
 
 class DeviceUnreachable(UpdateFailed):
