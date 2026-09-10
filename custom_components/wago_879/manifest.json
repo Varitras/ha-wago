@@ -18,5 +18,5 @@
   "requirements": [
     "modbus-connection[tmodbus]>=4.10.0"
   ],
-  "version": "0.1.0b1"
+  "version": "0.1.0b2"
 }
