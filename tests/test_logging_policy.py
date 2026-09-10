@@ -1,6 +1,10 @@
 """Masking keeps meters apart; an absent meter is not an error."""
 
-from custom_components.wago_879.logging_policy import IDENTIFIER_TAIL_LENGTH, mask
+from custom_components.wago_879.logging_policy import (
+    IDENTIFIER_TAIL_LENGTH,
+    identifier_tail,
+    mask,
+)
 
 SERIAL = "00123456"
 HOST = "192.0.2.10"
@@ -9,6 +13,12 @@ HOST = "192.0.2.10"
 def test_mask_keeps_only_the_tail():
     assert mask(SERIAL) == "...3456"
     assert mask(HOST) == "...2.10"
+
+
+def test_the_tail_is_what_the_mask_shows_without_its_prefix():
+    """The device name shows the same tail; how much is safe is decided once."""
+    assert identifier_tail(SERIAL) == "3456"
+    assert mask(SERIAL).endswith(identifier_tail(SERIAL))
 
 
 def test_two_meters_of_one_installation_stay_distinguishable():

@@ -99,7 +99,10 @@ def _legacy_entry(hass, unique_id=LEGACY_UNIQUE_ID, entity_id=LEGACY_ENTITY_ID):
 
 
 def _entry(hass):
-    entry = MockConfigEntry(domain=DOMAIN, title="meter", data=DATA, unique_id=SERIAL)
+    # Titled the way the config flow titles an entry: with the host.
+    entry = MockConfigEntry(
+        domain=DOMAIN, title=DATA[CONF_HOST], data=DATA, unique_id=SERIAL
+    )
     entry.add_to_hass(hass)
     return entry
 
@@ -142,7 +145,7 @@ async def test_without_legacy_entries_setup_is_a_plain_setup(hass):
     await hass.async_block_till_done()
 
     assert er.async_get(hass).async_get_entity_id("sensor", DOMAIN, NEW_UNIQUE_ID) == (
-        "sensor.meter_active_energy_total"
+        f"sensor.wago_{SERIAL[-4:]}_active_energy_total"
     )
 
 

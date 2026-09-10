@@ -25,6 +25,8 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 SERIAL = "00123456"
+SERIAL_TAIL = "3456"
+DEVICE_NAME = f"WAGO {SERIAL_TAIL}"
 BASE_DATA = {
     CONF_HOST: "192.0.2.10",
     CONF_PORT: 502,
@@ -60,7 +62,12 @@ def meter(mock_modbus):
 
 def _entry(hass, data=None, unique_id=SERIAL):
     entry = MockConfigEntry(
-        domain=DOMAIN, title="meter", data=data or BASE_DATA, unique_id=unique_id
+        domain=DOMAIN,
+        # What the config flow titles an entry with: anything derived from the
+        # title therefore carries the meter's address.
+        title=BASE_DATA[CONF_HOST],
+        data=data or BASE_DATA,
+        unique_id=unique_id,
     )
     entry.add_to_hass(hass)
     return entry
@@ -83,6 +90,27 @@ async def test_setup_creates_sensors_from_the_first_refresh(hass):
     )
     assert hass.states.get(voltage).state == "230.5"
     assert hass.states.get(energy).state == "1234.5"
+
+
+async def test_no_entity_is_named_after_the_meters_address(hass):
+    """The device name, not the entry title, names every entity.
+
+    Without a device name Home Assistant falls back to the entry title - the
+    host - so both the entity id and the friendly name of all 109 sensors
+    carry an address that changes whenever the meter moves.
+    """
+    entry = await _setup(hass, _entry(hass))
+
+    registry = er.async_get(hass)
+    voltage = registry.async_get_entity_id("sensor", DOMAIN, f"{SERIAL}_voltage_l1")
+    assert voltage == f"sensor.wago_{SERIAL_TAIL}_voltage_l1"
+    assert hass.states.get(voltage).attributes["friendly_name"] == (
+        f"{DEVICE_NAME} Voltage L1"
+    )
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, SERIAL), entry.entry_id
+    )
+    assert device.name == DEVICE_NAME
 
 
 async def test_the_device_carries_the_serial(hass):

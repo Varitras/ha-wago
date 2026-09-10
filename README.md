@@ -72,6 +72,28 @@ After step 3 Home Assistant shows those entities as "unavailable" (restored)
 until the integration adopts them; that is expected and does not block the
 adoption. Only an entity a platform is really serving does.
 
+## Entity naming
+
+The device is called `WAGO <last four digits of the serial>`, and every
+entity is named after it: `sensor.wago_3456_voltage_l1`, shown as
+"WAGO 3456 Voltage L1". The model is not part of the name - it belongs on the
+device card, and naming entities after one model would age badly once this
+integration serves further WAGO meters. The config entry itself is still
+titled with the meter's address, so two meters are easy to tell apart in the
+integrations list, but no entity id or friendly name depends on an address
+that changes when the meter moves.
+
+Entities adopted from a YAML `modbus:` block keep their old entity ids, as
+described above.
+
+Earlier versions had no device name and so built entity ids from the entry
+title, i.e. from the meter's address (`sensor.192_0_2_10_voltage_l1`). Those
+ids are renamed once, on the next setup, and their recorded history and
+statistics move with them. Only ids in exactly that generated form are
+touched: an adopted id and an id renamed by hand are left as they are, and an
+id whose new name is already taken keeps its old one, with a warning in the
+log.
+
 ## Poll intervals
 
 The two measured groups have independent, configurable intervals, matching
