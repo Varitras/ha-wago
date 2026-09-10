@@ -84,6 +84,14 @@ that changes when the meter moves.
 Entities adopted from a YAML `modbus:` block keep their old entity ids, as
 described above.
 
+Earlier versions had no device name and so built entity ids from the entry
+title, i.e. from the meter's address (`sensor.192_0_2_10_voltage_l1`). Those
+ids are renamed once, on the next setup, and their recorded history and
+statistics move with them. Only ids in exactly that generated form are
+touched: an adopted id and an id renamed by hand are left as they are, and an
+id whose new name is already taken keeps its old one, with a warning in the
+log.
+
 ## Poll intervals
 
 The two measured groups have independent, configurable intervals, matching

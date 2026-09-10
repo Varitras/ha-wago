@@ -15,7 +15,7 @@ from homeassistant.exceptions import (
     HomeAssistantError,
 )
 
-from . import migration
+from . import entity_id_rename, migration
 from .const import (
     CONF_ENERGY_INTERVAL,
     CONF_HOST,
@@ -75,6 +75,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
         )
 
     await migration.async_adopt_legacy_entities(hass, entry, serial)
+    # After adoption: an adopted entity id is one of those this must not touch,
+    # and it is only in the registry once adoption has put it there.
+    entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
 
     # The coordinator name goes into every "Error fetching %s data" line core
     # writes on an outage, so it may not be the entry title - that is the

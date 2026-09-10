@@ -233,6 +233,7 @@ files = [
   "custom_components/wago_879/__init__.py",
   "custom_components/wago_879/config_flow.py",
   "custom_components/wago_879/const.py",
+  "custom_components/wago_879/entity_id_rename.py",
   "custom_components/wago_879/logging_policy.py",
   "custom_components/wago_879/migration.py",
   "custom_components/wago_879/sensor.py",
