@@ -198,9 +198,11 @@ def test_the_type_check_runs_the_same_home_assistant_as_the_test_job():
         "the type check resolves its Home Assistant some other way than the "
         "job whose type surface it is supposed to be checking"
     )
-    assert not [line for line in steps if "requirements_test.txt" in line], (
-        "the unpinned requirements file is back, so this job can install a "
-        "Home Assistant beta the tests never run against"
+    # Reading one pinned line out of requirements_test.txt is fine; installing
+    # the whole file is not - it carries the unpinned plugin.
+    assert not [line for line in steps if "-r requirements_test.txt" in line], (
+        "the unpinned requirements file is installed wholesale, so this job "
+        "can pull a Home Assistant beta the tests never run against"
     )
 
 
@@ -223,12 +225,12 @@ def test_every_job_that_imports_the_integration_equips_it(job):
 def test_the_workflow_still_runs_ruff_pinned():
     """Formatting that only one machine checks survives until the first
     commit written somewhere else; an unpinned Ruff enforces whatever it
-    decided this week."""
+    decided this week. The pin itself lives in requirements_test.txt."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "run: ruff check ." in workflow
     assert "run: ruff format --check ." in workflow
-    assert re.search(r'pip install "ruff==[\d.]+"', workflow)
+    assert _reads_pin_from_requirements(workflow, "ruff")
 
 
 def test_the_secret_scan_in_ci_uses_the_repositorys_own_rules():
@@ -253,19 +255,47 @@ def _pins_of(text: str) -> dict[str, str]:
     }
 
 
-def test_the_workflow_and_the_local_gates_pin_the_same_versions():
-    """check.sh and the pre-push hook run what requirements_test.txt
-    installs, CI runs what the workflow installs. Two pins for one tool
-    means a formatter that reflows differently from the one that decides
-    the build - a red CI nobody changed."""
-    in_ci = _pins_of(WORKFLOW.read_text(encoding="utf-8"))
+def _reads_pin_from_requirements(workflow: str, tool: str) -> bool:
+    """Whether the workflow installs `tool` at the version requirements_test.txt names."""
+    return f"grep -E '^{tool}==' requirements_test.txt" in workflow
+
+
+def test_every_gate_has_one_pin_and_the_workflow_reads_it():
+    """One pin per tool, in requirements_test.txt, and CI takes it from there.
+
+    The workflow used to carry its own copy of each version. Dependabot reads
+    requirements files and not run: steps, so its first bump raised one copy
+    and left the other - a formatter in CI that reflows differently from the
+    one deciding locally, a red build nobody changed. A literal version for a
+    gate tool in the workflow is that second copy coming back.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
     locally = _pins_of(TEST_REQUIREMENTS.read_text(encoding="utf-8"))
 
-    assert set(in_ci) == set(GATE_TOOLS), f"a gate lost its pin in CI: {in_ci}"
-    assert in_ci == locally, (
-        f"CI and requirements_test.txt disagree: {in_ci} vs {locally}. "
-        "Raise both in the same commit."
+    assert set(locally) == set(GATE_TOOLS), (
+        f"requirements_test.txt must pin every gate tool with ==: {locally}"
     )
+    literal_in_ci = _pins_of(workflow)
+    assert not literal_in_ci, (
+        f"the workflow pins {literal_in_ci} itself - read the version from "
+        "requirements_test.txt instead, so Dependabot moves the only copy"
+    )
+    not_read = [
+        tool for tool in GATE_TOOLS if not _reads_pin_from_requirements(workflow, tool)
+    ]
+    assert not not_read, (
+        f"the workflow does not take {not_read} from requirements_test.txt - "
+        "an unpinned install enforces whatever the tool released this week"
+    )
+
+
+def test_the_pin_reader_matches_the_workflow_line_exactly():
+    """Proof-of-red for the helper above: the shape it looks for, and a
+    near miss that must not count."""
+    exact = "run: pip install \"$(grep -E '^ruff==' requirements_test.txt)\""
+    near_miss = 'run: pip install "$(grep ruff requirements_test.txt)"'
+    assert _reads_pin_from_requirements(exact, "ruff")
+    assert not _reads_pin_from_requirements(near_miss, "ruff")
 
 
 def test_the_step_reader_skips_comments_and_stops_at_the_next_job():

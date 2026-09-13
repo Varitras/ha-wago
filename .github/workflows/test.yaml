@@ -33,12 +33,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      # Pinned. An unpinned install means the CI enforces whatever Ruff
-      # decided this week, and a release that reflows differently would fail
-      # a build nobody changed. Raise it deliberately, together with the local
-      # run.
+      # The pin lives in requirements_test.txt and nowhere else: a second copy
+      # here went stale on the first Dependabot bump, and a formatter that
+      # reflows differently from the one that decides the build is a red CI
+      # nobody changed.
       - name: Install Ruff
-        run: pip install "ruff==0.16.6"
+        run: pip install "$(grep -E '^ruff==' requirements_test.txt)"
       - name: Lint
         run: ruff check .
       # The formatting only stays put if something checks it.
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install pip-audit
-        run: pip install "pip-audit==2.10.1"
+        run: pip install "$(grep -E '^pip-audit==' requirements_test.txt)"
       - name: Audit the runtime requirements
         run: pip-audit -r requirements.txt --strict
 
@@ -107,7 +107,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install "$PHCC_SPEC" -r requirements.txt
-          pip install "mypy==2.3.1"
+          pip install "$(grep -E '^mypy==' requirements_test.txt)"
       # Same environment as the test job, for the same reason the plugin
       # version is: a checker looking at a different Modbus library than the
       # tests run against vouches for a type surface nothing exercises.
