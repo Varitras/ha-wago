@@ -49,8 +49,9 @@ def redact(text: str, identifier: str) -> str:
     """`text` with every occurrence of `identifier` masked.
 
     For messages this integration did not write: modbus-connection says
-    "could not connect to {host}:{port}", core's link-settings clash names the
-    endpoint twice. Both are worth showing, neither with the address in it.
+    "could not connect to {host}:{port}", core's link-settings clash repeats the
+    endpoint in every form it has. Both are worth showing, neither with the
+    address in it.
     """
     if not identifier:
         return text
