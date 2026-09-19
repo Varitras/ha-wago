@@ -28,7 +28,8 @@ from .const import (
     DEFAULT_UNIT_ID,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
-from .logging_policy import mask
+from .logging_policy import mask, redact
+from .sensor import device_name
 from .wago_879_api.device import WagoMeter
 
 PLATFORMS = [Platform.SENSOR]
@@ -40,9 +41,16 @@ def _setting(entry: WagoConfigEntry, key: str, default: int) -> int:
 
 async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """Read the identity, adopt the YAML entities, start both pollers."""
-    params = ModbusTcpParams(
-        host=str(entry.data[CONF_HOST]), port=_setting(entry, CONF_PORT, DEFAULT_PORT)
-    )
+    host = str(entry.data[CONF_HOST])
+    # Core logs the title on every setup failure - "Error setting up entry
+    # <title>" - and earlier versions titled the entry with the address. Done
+    # before anything can fail, keyed on the serial the entry belongs to; a
+    # title the user chose is not the address and stays.
+    if entry.unique_id is not None and entry.title == host:
+        hass.config_entries.async_update_entry(
+            entry, title=device_name(entry.unique_id)
+        )
+    params = ModbusTcpParams(host=host, port=_setting(entry, CONF_PORT, DEFAULT_PORT))
     try:
         unit = async_get_unit(
             hass, entry, params, _setting(entry, CONF_UNIT_ID, DEFAULT_UNIT_ID)
@@ -51,12 +59,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
         # Another entry holds this endpoint with different link settings.
         # Not ConfigEntryNotReady: no retry can resolve a clash of
         # configurations, so the user has to see the helper's own message.
-        raise ConfigEntryError(str(err)) from err
+        # `from None` here and below: core writes the setup error with the
+        # full traceback, and a chained cause would carry the unmasked text.
+        raise ConfigEntryError(redact(str(err), host)) from None
     meter = WagoMeter(unit)
     try:
         identity = await meter.async_read_identity()
     except ModbusError as err:
-        raise ConfigEntryNotReady(f"{mask(params.host)}: {err}") from err
+        raise ConfigEntryNotReady(f"{mask(host)}: {redact(str(err), host)}") from None
     serial = meter.serial_number
     assert serial is not None
     # Before adoption, the first refresh and the platforms: the device and every
@@ -67,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     # flow always sets one, so that is only a hand-made entry.
     if entry.unique_id is not None and entry.unique_id != serial:
         raise ConfigEntryError(
-            f"The meter at {mask(params.host)} answers as serial "
+            f"The meter at {mask(host)} answers as serial "
             f"{mask(serial)}, but this entry belongs to serial "
             f"{mask(entry.unique_id)}. Point the entry at the address of meter "
             f"{mask(entry.unique_id)} with Reconfigure, or add meter "
@@ -80,9 +90,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
 
     # The coordinator name goes into every "Error fetching %s data" line core
-    # writes on an outage, so it may not be the entry title - that is the
-    # meter's address. The masked serial tells the two pollers of one meter
-    # apart, and two meters from each other, and never changes for a meter.
+    # writes on an outage, so it may not be the entry title - the user can
+    # rename that to anything. The masked serial tells the two pollers of one
+    # meter apart, and two meters from each other, and never changes.
     measurements = WagoCoordinator(
         hass,
         entry,

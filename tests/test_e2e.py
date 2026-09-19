@@ -1,13 +1,19 @@
 """Entry setup, entities and unload against a real Home Assistant core."""
 
+import logging
 import struct
 
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
 
+from datetime import timedelta
+
 from modbus_connection import ModbusConnectionError, ModbusTcpParams
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.wago_879.const import (
     CONF_ENERGY_INTERVAL,
@@ -17,10 +23,12 @@ from custom_components.wago_879.const import (
     CONF_UNIT_ID,
     DOMAIN,
 )
+from custom_components.wago_879.coordinator import FAILED_POLLS_TOLERATED
 from custom_components.wago_879.logging_policy import mask
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.util import dt as dt_util
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -63,8 +71,7 @@ def meter(mock_modbus):
 def _entry(hass, data=None, unique_id=SERIAL):
     entry = MockConfigEntry(
         domain=DOMAIN,
-        # What the config flow titles an entry with: anything derived from the
-        # title therefore carries the meter's address.
+        # What earlier versions titled an entry with; setup retitles it.
         title=BASE_DATA[CONF_HOST],
         data=data or BASE_DATA,
         unique_id=unique_id,
@@ -198,3 +205,99 @@ async def test_a_clash_of_link_settings_is_a_setup_error(hass):
     assert not await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_ERROR
     assert "different link settings" in entry.reason
+
+
+def _connection_refused() -> ModbusConnectionError:
+    """The wording modbus-connection uses, address included."""
+    return ModbusConnectionError(
+        f"could not connect to {BASE_DATA[CONF_HOST]}:{BASE_DATA[CONF_PORT]}"
+    )
+
+
+# The records this integration answers for: its own, and what core writes
+# about the entry - the title on every setup failure, the message plus the
+# traceback with every chained cause. Core's modbus component logs the
+# endpoint at debug on its own account and is not this integration's to fix.
+ANSWERED_FOR = ("custom_components.wago_879", "homeassistant.config_entries")
+
+
+def _answered_for(caplog) -> str:
+    formatter = logging.Formatter()
+    return "\n".join(
+        formatter.format(record)
+        for record in caplog.records
+        if record.name.startswith(ANSWERED_FOR)
+    )
+
+
+def _assert_address_kept_out(caplog, entry):
+    """The log is what gets attached to an issue report."""
+    assert BASE_DATA[CONF_HOST] not in _answered_for(caplog)
+    assert BASE_DATA[CONF_HOST] not in (entry.reason or "")
+
+
+async def test_the_entry_is_titled_after_the_device_not_the_address(hass):
+    entry = await _setup(hass, _entry(hass))
+    assert entry.title == DEVICE_NAME
+
+
+async def test_a_link_settings_clash_keeps_the_address_out_of_the_log(hass, caplog):
+    caplog.set_level(logging.DEBUG)
+    holder = MockConfigEntry(domain="other", data={})
+    holder.add_to_hass(hass)
+    async_get_unit(
+        hass,
+        holder,
+        ModbusTcpParams(
+            host=BASE_DATA[CONF_HOST], port=BASE_DATA[CONF_PORT], framer="rtu"
+        ),
+        1,
+    )
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert "different link settings" in entry.reason
+    _assert_address_kept_out(caplog, entry)
+
+
+async def test_a_refused_identity_read_keeps_the_address_out_of_the_log(
+    hass, meter, caplog
+):
+    caplog.set_level(logging.DEBUG)
+    meter.fail_requests(_connection_refused())
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    _assert_address_kept_out(caplog, entry)
+
+
+async def test_a_serial_mismatch_keeps_the_address_out_of_the_log(hass, meter, caplog):
+    caplog.set_level(logging.DEBUG)
+    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765}})
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    _assert_address_kept_out(caplog, entry)
+
+
+async def test_a_failed_poll_keeps_the_address_out_of_the_log(hass, meter, caplog):
+    """Both branches: the tolerated polls write a debug line, the one past the
+    tolerance raises - and core logs that one with its traceback at debug."""
+    entry = await _setup(hass, _entry(hass))
+    caplog.set_level(logging.DEBUG)
+    meter.fail_requests(_connection_refused())
+
+    for poll in range(1, FAILED_POLLS_TOLERATED + 2):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=301 * poll))
+        await hass.async_block_till_done()
+
+    assert "poll failed" in caplog.text
+    assert "Error fetching" in caplog.text
+    _assert_address_kept_out(caplog, entry)

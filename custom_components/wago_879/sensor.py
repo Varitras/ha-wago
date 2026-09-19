@@ -25,10 +25,10 @@ def device_name(serial: str) -> str:
 
     With `has_entity_name` this name is the first half of every entity id and
     friendly name the integration creates. Home Assistant falls back to the
-    config entry title for a device without a name, and that title is the
-    meter's address, so entity ids would otherwise be built from an address
-    that changes whenever the meter moves. The serial tail keeps two meters of
-    one installation apart.
+    config entry title for a device without a name, and earlier versions titled
+    the entry with the meter's address, so entity ids were built from an
+    address that changes whenever the meter moves. The serial tail keeps two
+    meters of one installation apart.
 
     The model is deliberately left out: it belongs on the device card, and
     naming entities after one model would age badly once this integration

@@ -45,6 +45,19 @@ def mask(identifier: str) -> str:
     return f"{MASK_PREFIX}{identifier_tail(identifier)}"
 
 
+def redact(text: str, identifier: str) -> str:
+    """`text` with every occurrence of `identifier` masked.
+
+    For messages this integration did not write: modbus-connection says
+    "could not connect to {host}:{port}", core's link-settings clash repeats the
+    endpoint in every form it has. Both are worth showing, neither with the
+    address in it.
+    """
+    if not identifier:
+        return text
+    return text.replace(identifier, mask(identifier))
+
+
 class DeviceUnreachable(UpdateFailed):
     """The meter did not answer at all - normal while it is switched off."""
 

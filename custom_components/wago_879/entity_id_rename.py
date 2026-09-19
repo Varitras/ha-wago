@@ -1,8 +1,10 @@
 """Move the entity ids an unnamed device left behind onto the device name.
 
 Until the device carried a name, Home Assistant named it after the config
-entry - the meter's address - and with `has_entity_name` every entity id was
-built from that address. Renaming in the entity registry is what carries the
+entry - then titled with the meter's address - and with `has_entity_name`
+every entity id was built from that address. The title has since moved on to
+the device name, so the address in the entry's data is what those ids were
+built from. Renaming in the entity registry is what carries the
 recorded history along: verified in
 `homeassistant/components/recorder/entity_registry.py`, the recorder moves
 statistics and states metadata on an entity id *rename*, so the alternative
@@ -27,6 +29,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
+from .const import CONF_HOST
 from .logging_policy import mask
 from .sensor import device_name
 
@@ -46,14 +49,14 @@ def _generated_entity_id(entry: er.RegistryEntry, device: str) -> str:
 def async_rename_generated_entity_ids(
     hass: HomeAssistant, entry: ConfigEntry, serial: str
 ) -> None:
-    """Rename what the entry title named; a no-op once every id has moved."""
+    """Rename what the address named; a no-op once every id has moved."""
     registry = er.async_get(hass)
     named_after_the_device = device_name(serial)
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if registry_entry.original_name is None:
             continue
         if registry_entry.entity_id != _generated_entity_id(
-            registry_entry, entry.title
+            registry_entry, str(entry.data[CONF_HOST])
         ):
             continue
         wanted = _generated_entity_id(registry_entry, named_after_the_device)

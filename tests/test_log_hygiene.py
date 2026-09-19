@@ -31,7 +31,9 @@ SUSPICIOUS_PARTS = {
     "token",
     "unique",
 }
-MASK = "mask"
+# Which arguments a call masks: `mask(identifier)` all of them,
+# `redact(text, identifier)` the identifier only - the text is still readable.
+MASKING_CALLS = {"mask": slice(0, None), "redact": slice(1, None)}
 
 # Identifiers allowed through, and why. Named here rather than dropped from
 # SUSPICIOUS_PARTS so the word keeps guarding every other site.
@@ -62,16 +64,22 @@ def _suspicious_names(node) -> set:
 
 
 def _masked_names(node) -> set:
-    """The identifiers `node` passes through the masking function."""
+    """The identifiers `node` passes through a masking function."""
     found = set()
     for inner in ast.walk(node):
-        is_mask_call = isinstance(inner, ast.Call) and (
-            (isinstance(inner.func, ast.Name) and inner.func.id == MASK)
-            or (isinstance(inner.func, ast.Attribute) and inner.func.attr == MASK)
-        )
-        if is_mask_call:
-            for argument in inner.args:
-                found |= _suspicious_names(argument)
+        if not isinstance(inner, ast.Call):
+            continue
+        if isinstance(inner.func, ast.Name):
+            called = inner.func.id
+        elif isinstance(inner.func, ast.Attribute):
+            called = inner.func.attr
+        else:
+            continue
+        masked = MASKING_CALLS.get(called)
+        if masked is None:
+            continue
+        for argument in inner.args[masked]:
+            found |= _suspicious_names(argument)
     return found
 
 
@@ -138,6 +146,13 @@ def test_the_scan_catches_the_lines_it_was_written_for():
         leaks('raise ConfigEntryNotReady(f"{mask(params.host)}: {err}") from err')
         == set()
     )
+    # The text of `err` is beyond a name heuristic; the log-capture tests in
+    # test_e2e.py are what pin it. The scan only has to let the redaction pass.
+    assert leaks("raise ConfigEntryError(redact(str(err), host)) from None") == set()
+    # Only the identifier is masked; what redact is given as text stays readable.
+    assert leaks('raise ConfigEntryError(redact(f"meter {serial}", host))') == {
+        "serial"
+    }
 
     mismatch = (
         "raise ConfigEntryError(\n"
