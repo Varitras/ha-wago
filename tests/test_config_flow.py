@@ -134,7 +134,9 @@ async def test_reconfigure_updates_the_host_and_reloads_once(hass, meter):
     """The entry is set up first: only a loaded entry carries the update
     listener, and a listener plus a scheduled reload would rebuild the Modbus
     unit twice - which core reports and drops in 2026.12."""
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="my meter", data=USER_INPUT, unique_id=SERIAL
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -151,7 +153,8 @@ async def test_reconfigure_updates_the_host_and_reloads_once(hass, meter):
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.data[CONF_HOST] == "192.0.2.11"
-    assert entry.title == "WAGO 3456"
+    # A title the user chose is theirs; only an address is ever retitled.
+    assert entry.title == "my meter"
     # The flow's probe opens one connection and the single reload the update
     # listener performs opens the second; a second reload would make three.
     assert len(meter.params_seen) == connections_before + 2

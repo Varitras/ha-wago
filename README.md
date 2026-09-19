@@ -79,10 +79,11 @@ The device is called `WAGO <last four digits of the serial>`, and every
 entity is named after it: `sensor.wago_3456_voltage_l1`, shown as
 "WAGO 3456 Voltage L1". The model is not part of the name - it belongs on the
 device card, and naming entities after one model would age badly once this
-integration serves further WAGO meters. The config entry itself is still
-titled with the meter's address, so two meters are easy to tell apart in the
-integrations list, but no entity id or friendly name depends on an address
-that changes when the meter moves.
+integration serves further WAGO meters. The config entry carries the same
+name, so nothing shown in the integrations list, in an entity id or in a
+friendly name depends on an address that changes when the meter moves. An
+entry from an earlier version that was titled with the address is renamed
+once on the next start; a title you chose yourself is kept.
 
 Entities adopted from a YAML `modbus:` block keep their old entity ids, as
 described above.

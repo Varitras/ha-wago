@@ -90,9 +90,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
 
     # The coordinator name goes into every "Error fetching %s data" line core
-    # writes on an outage, so it may not be the entry title - that is the
-    # meter's address. The masked serial tells the two pollers of one meter
-    # apart, and two meters from each other, and never changes for a meter.
+    # writes on an outage, so it may not be the entry title - the user can
+    # rename that to anything. The masked serial tells the two pollers of one
+    # meter apart, and two meters from each other, and never changes.
     measurements = WagoCoordinator(
         hass,
         entry,

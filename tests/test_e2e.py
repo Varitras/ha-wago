@@ -23,6 +23,7 @@ from custom_components.wago_879.const import (
     CONF_UNIT_ID,
     DOMAIN,
 )
+from custom_components.wago_879.coordinator import FAILED_POLLS_TOLERATED
 from custom_components.wago_879.logging_policy import mask
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
@@ -70,8 +71,7 @@ def meter(mock_modbus):
 def _entry(hass, data=None, unique_id=SERIAL):
     entry = MockConfigEntry(
         domain=DOMAIN,
-        # What the config flow titles an entry with: anything derived from the
-        # title therefore carries the meter's address.
+        # What earlier versions titled an entry with; setup retitles it.
         title=BASE_DATA[CONF_HOST],
         data=data or BASE_DATA,
         unique_id=unique_id,
@@ -288,12 +288,16 @@ async def test_a_serial_mismatch_keeps_the_address_out_of_the_log(hass, meter, c
 
 
 async def test_a_failed_poll_keeps_the_address_out_of_the_log(hass, meter, caplog):
+    """Both branches: the tolerated polls write a debug line, the one past the
+    tolerance raises - and core logs that one with its traceback at debug."""
     entry = await _setup(hass, _entry(hass))
     caplog.set_level(logging.DEBUG)
     meter.fail_requests(_connection_refused())
 
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=301))
-    await hass.async_block_till_done()
+    for poll in range(1, FAILED_POLLS_TOLERATED + 2):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=301 * poll))
+        await hass.async_block_till_done()
 
     assert "poll failed" in caplog.text
+    assert "Error fetching" in caplog.text
     _assert_address_kept_out(caplog, entry)
