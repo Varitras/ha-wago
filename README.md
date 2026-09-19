@@ -24,7 +24,8 @@ interval; the identity group is read once, when the entry is set up.
 | Group | Default state | Notes |
 |---|---|---|
 | Measurements (voltage, current, frequency, power, power factor) | enabled | regular sensors |
-| Energy: total, import and export counters and their per-phase splits | enabled | `total_increasing`, kept in kWh/kvarh to match the statistics already recorded by the replaced YAML setup |
+| Energy: import and export counters and their per-phase splits | enabled | `total_increasing`, kept in kWh/kvarh to match the statistics already recorded by the replaced YAML setup |
+| Energy: netted totals (import minus export) and their per-phase splits | enabled | `total`, because a feed-in surplus makes them fall or go negative; same kWh/kvarh units |
 | Energy: per-tariff (T1-T4) and reactive per-quadrant (Q1-Q4) split counters, day counters (total and per phase) | **disabled by default** | a direct-connected meter without tariff switching holds zero in most of these; enable per entity if needed |
 | Energy: `tariff` (the active tariff word) | enabled, **diagnostic** | |
 | Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
