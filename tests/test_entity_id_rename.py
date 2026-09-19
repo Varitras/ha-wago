@@ -128,6 +128,26 @@ async def test_an_id_built_from_the_host_moves_to_the_device_name(hass):
     assert hass.states.get(HOST_ENTITY_ID) is None
 
 
+async def test_a_retitled_entry_still_moves_the_ids_its_old_title_built(hass):
+    """Setup retitles the entry after the device, so the title says nothing
+    about the address the old ids were built from; the host in the data does."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, title=DEVICE_ENTITY_ID, data=DATA, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _existing_entity(
+        hass,
+        entry,
+        FREQUENCY_UNIQUE_ID,
+        HOST_ENTITY_ID.split(".", 1)[1],
+        FREQUENCY_NAME,
+    )
+
+    await _setup(hass, entry)
+
+    assert _entity_id(hass, FREQUENCY_UNIQUE_ID) == DEVICE_ENTITY_ID
+
+
 async def test_statistics_survive_the_rename(recorder_mock, hass):
     entry = _entry(hass)
     _existing_entity(

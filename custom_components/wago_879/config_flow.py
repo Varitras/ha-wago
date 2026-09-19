@@ -27,6 +27,7 @@ from .const import (
     INTERVAL_MAX_SECONDS,
     INTERVAL_MIN_SECONDS,
 )
+from .sensor import device_name
 from .wago_879_api.device import WagoMeter
 
 _interval = vol.All(
@@ -128,10 +129,11 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors, serial = await self._validate(user_input)
             if not errors:
+                assert serial is not None
                 await self.async_set_unique_id(serial)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=user_input[CONF_HOST], data=user_input
+                    title=device_name(serial), data=user_input
                 )
         schema = vol.Schema(
             {
@@ -150,6 +152,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors, serial = await self._validate(user_input)
             if not errors:
+                assert serial is not None
                 await self.async_set_unique_id(serial)
                 self._abort_if_unique_id_mismatch()
                 # Read before the update: the listener runs eagerly inside
@@ -163,7 +166,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.hass.config_entries.async_update_entry(
                     entry,
                     data={**entry.data, **user_input},
-                    title=user_input[CONF_HOST],
+                    title=device_name(serial),
                 )
                 if not reloads_itself:
                     # Only a successful setup registers the listener, so an

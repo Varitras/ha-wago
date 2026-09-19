@@ -58,7 +58,7 @@ async def test_the_user_step_creates_an_entry_keyed_by_serial(hass):
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == HOST
+    assert result["title"] == "WAGO 3456"
     assert result["data"] == USER_INPUT
     assert result["result"].unique_id == SERIAL
 
@@ -151,6 +151,7 @@ async def test_reconfigure_updates_the_host_and_reloads_once(hass, meter):
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.data[CONF_HOST] == "192.0.2.11"
+    assert entry.title == "WAGO 3456"
     # The flow's probe opens one connection and the single reload the update
     # listener performs opens the second; a second reload would make three.
     assert len(meter.params_seen) == connections_before + 2

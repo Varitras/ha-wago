@@ -31,7 +31,8 @@ SUSPICIOUS_PARTS = {
     "token",
     "unique",
 }
-MASK = "mask"
+# `mask` shortens an identifier, `redact` masks it inside text written elsewhere.
+MASKING_CALLS = {"mask", "redact"}
 
 # Identifiers allowed through, and why. Named here rather than dropped from
 # SUSPICIOUS_PARTS so the word keeps guarding every other site.
@@ -66,8 +67,11 @@ def _masked_names(node) -> set:
     found = set()
     for inner in ast.walk(node):
         is_mask_call = isinstance(inner, ast.Call) and (
-            (isinstance(inner.func, ast.Name) and inner.func.id == MASK)
-            or (isinstance(inner.func, ast.Attribute) and inner.func.attr == MASK)
+            (isinstance(inner.func, ast.Name) and inner.func.id in MASKING_CALLS)
+            or (
+                isinstance(inner.func, ast.Attribute)
+                and inner.func.attr in MASKING_CALLS
+            )
         )
         if is_mask_call:
             for argument in inner.args:
@@ -138,6 +142,9 @@ def test_the_scan_catches_the_lines_it_was_written_for():
         leaks('raise ConfigEntryNotReady(f"{mask(params.host)}: {err}") from err')
         == set()
     )
+    # The text of `err` is beyond a name heuristic; the log-capture tests in
+    # test_e2e.py are what pin it. The scan only has to let the redaction pass.
+    assert leaks("raise ConfigEntryError(redact(str(err), host)) from None") == set()
 
     mismatch = (
         "raise ConfigEntryError(\n"

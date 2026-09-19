@@ -15,8 +15,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import CONF_HOST
 from .entity_descriptions import Block
-from .logging_policy import UNREACHABLE_ERRORS, DeviceUnreachable, OfflineIsNotAnError
+from .logging_policy import (
+    UNREACHABLE_ERRORS,
+    DeviceUnreachable,
+    OfflineIsNotAnError,
+    redact,
+)
 
 _LOGGER = logging.getLogger(__name__)
 # This logger is the one handed to every WagoCoordinator below, and a filter
@@ -49,6 +55,7 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._read = read
         self._failed_polls = 0
+        self._host = str(entry.data.get(CONF_HOST, ""))
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -56,7 +63,7 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 values = await self._read()
         except (TimeoutError, ModbusError) as err:
             self._failed_polls += 1
-            failure = _describe_failure(err)
+            failure = _describe_failure(err, self._host)
             if self.data is not None and self._failed_polls <= FAILED_POLLS_TOLERATED:
                 _LOGGER.debug(
                     "%s: poll failed (%d of %d tolerated), keeping the last values: %s",
@@ -71,16 +78,17 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if isinstance(err, UNREACHABLE_ERRORS)
                 else UpdateFailed
             )
-            raise failed(f"{self.name}: {failure}") from err
+            # `from None`: core logs the full error at debug, cause included.
+            raise failed(f"{self.name}: {failure}") from None
         self._failed_polls = 0
         return values
 
 
-def _describe_failure(err: Exception) -> str:
+def _describe_failure(err: Exception, host: str) -> str:
     """Name a bare timeout as such; ``str(TimeoutError())`` is empty and unhelpful."""
     if isinstance(err, TimeoutError):
         return f"Modbus read timed out after {UPDATE_TIMEOUT_SECONDS}s"
-    return f"Modbus read failed: {err}"
+    return f"Modbus read failed: {redact(str(err), host)}"
 
 
 @dataclass

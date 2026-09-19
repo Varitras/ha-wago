@@ -4,6 +4,7 @@ from custom_components.wago_879.logging_policy import (
     IDENTIFIER_TAIL_LENGTH,
     identifier_tail,
     mask,
+    redact,
 )
 
 SERIAL = "00123456"
@@ -31,3 +32,15 @@ def test_an_identifier_no_longer_than_the_tail_reveals_nothing():
     """Keeping the tail of a short identifier would be keeping the identifier."""
     assert mask("a" * IDENTIFIER_TAIL_LENGTH) == "..."
     assert mask("") == "..."
+
+
+def test_redact_masks_the_address_inside_text_written_elsewhere():
+    """modbus-connection's own wording, address included."""
+    assert redact(f"could not connect to {HOST}:502", HOST) == (
+        f"could not connect to {mask(HOST)}:502"
+    )
+
+
+def test_redact_with_nothing_to_mask_leaves_the_text_alone():
+    """`str.replace("", ...)` would sprinkle the mask between every character."""
+    assert redact("could not connect", "") == "could not connect"
