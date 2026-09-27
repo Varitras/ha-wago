@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
+from custom_components.wago_879 import sensor
 from custom_components.wago_879.entity_descriptions import (
     LEGACY_UNIQUE_IDS,
     OMITTED_FIELDS,
@@ -234,6 +235,4 @@ def test_the_gate_names_a_field_the_setup_has_read():
 def test_the_platform_leaves_updates_to_the_coordinators():
     """The quality scale's parallel-updates rule: sensors fed by a coordinator
     never update on their own, so the platform limits nothing."""
-    from custom_components.wago_879 import sensor
-
     assert sensor.PARALLEL_UPDATES == 0
