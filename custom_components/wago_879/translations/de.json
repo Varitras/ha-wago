@@ -9,6 +9,13 @@
           "unit_id": "Modbus-Unit-ID des Zählers",
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des 879-9000 Modbus-TCP-Moduls.",
+          "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
+          "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1).",
+          "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
+          "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
       },
       "reconfigure": {
@@ -17,6 +24,11 @@
           "host": "Host",
           "port": "Port",
           "unit_id": "Modbus-Unit-ID des Zählers"
+        },
+        "data_description": {
+          "host": "Neue Adresse des Moduls. Dort muss derselbe Zähler antworten; ein Zähler mit anderer Seriennummer wird abgelehnt.",
+          "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
+          "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1)."
         }
       }
     },
@@ -37,6 +49,10 @@
         "data": {
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        },
+        "data_description": {
+          "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
+          "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
       }
     }

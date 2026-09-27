@@ -42,3 +42,21 @@ def test_every_language_has_the_same_keys_as_english(language):
         return {prefix}
 
     assert keys(_load(language)) == keys(_load(PACKAGE / "translations" / "en.json"))
+
+
+def _flow_steps(strings):
+    for section in ("config", "options"):
+        yield from strings[section]["step"].items()
+
+
+@pytest.mark.parametrize("language", LANGUAGES, ids=lambda p: p.stem)
+def test_every_form_field_explains_itself(language):
+    """The quality scale's config-flow rule: a field label alone leaves the
+    user guessing - which address, which unit id, why two intervals."""
+    missing = [
+        f"{step}.{field}"
+        for step, texts in _flow_steps(_load(language))
+        for field in texts.get("data", {})
+        if field not in texts.get("data_description", {})
+    ]
+    assert not missing, f"{language.name}: {missing}"

@@ -16,6 +16,9 @@ from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .entity_descriptions import SENSOR_DESCRIPTIONS, WagoSensorDescription
 from .logging_policy import identifier_tail
 
+# No sensor updates on its own: the coordinators poll, identity is read once.
+PARALLEL_UPDATES = 0
+
 MANUFACTURER = "WAGO"
 MODEL = "879-3000"
 

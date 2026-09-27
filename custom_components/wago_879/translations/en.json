@@ -9,6 +9,13 @@
           "unit_id": "Modbus unit id of the meter",
           "measurement_interval": "Poll interval for measurements (seconds)",
           "energy_interval": "Poll interval for energy counters (seconds)"
+        },
+        "data_description": {
+          "host": "IP address or host name of the 879-9000 Modbus TCP module.",
+          "port": "TCP port of the module. Modbus TCP uses 502 unless it was changed on the module.",
+          "unit_id": "Modbus address set on the meter itself (factory setting 1).",
+          "measurement_interval": "How often voltage, current, power and power factor are read.",
+          "energy_interval": "How often the energy counters are read. They change slowly, so a longer interval keeps the load on the Modbus link low."
         }
       },
       "reconfigure": {
@@ -17,6 +24,11 @@
           "host": "Host",
           "port": "Port",
           "unit_id": "Modbus unit id of the meter"
+        },
+        "data_description": {
+          "host": "New address of the module. The same meter has to answer there; a meter with a different serial number is refused.",
+          "port": "TCP port of the module. Modbus TCP uses 502 unless it was changed on the module.",
+          "unit_id": "Modbus address set on the meter itself (factory setting 1)."
         }
       }
     },
@@ -37,6 +49,10 @@
         "data": {
           "measurement_interval": "Poll interval for measurements (seconds)",
           "energy_interval": "Poll interval for energy counters (seconds)"
+        },
+        "data_description": {
+          "measurement_interval": "How often voltage, current, power and power factor are read.",
+          "energy_interval": "How often the energy counters are read. They change slowly, so a longer interval keeps the load on the Modbus link low."
         }
       }
     }

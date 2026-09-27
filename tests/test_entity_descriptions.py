@@ -229,3 +229,11 @@ def test_the_gate_names_a_field_the_setup_has_read():
     for description in SENSOR_DESCRIPTIONS:
         gate = description.populated_when_nonzero
         assert gate is None or gate in read_at_setup, description.key
+
+
+def test_the_platform_leaves_updates_to_the_coordinators():
+    """The quality scale's parallel-updates rule: sensors fed by a coordinator
+    never update on their own, so the platform limits nothing."""
+    from custom_components.wago_879 import sensor
+
+    assert sensor.PARALLEL_UPDATES == 0
