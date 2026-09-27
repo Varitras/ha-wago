@@ -408,7 +408,7 @@
       "message": "{entity_id} kann nicht nach {unique_id} verschoben werden: Diese Unique-ID ist bereits als {held_by} registriert. Entferne zuerst {held_by}."
     },
     "removed_entry_in_the_way": {
-      "message": "{entity_id} kann nicht übernommen werden: Ein gelöschter Eintrag für {unique_id} würde als {restored} wiederhergestellt. Entferne diesen gelöschten Eintrag endgültig, bevor du den Zähler einrichtest."
+      "message": "{entity_id} kann nicht übernommen werden: Home Assistant kennt noch eine gelöschte Entität für {unique_id} und würde sie als {restored} zurückholen. Gelöschte Entitäten vergisst Home Assistant 30 Tage nach dem Entfernen."
     },
     "entity_id_taken": {
       "message": "{entity_id} konnte nicht übernommen werden: Die Registry vergab {created}. Entferne die veraltete Entität, die diese ID belegt."
@@ -431,7 +431,7 @@
     },
     "removed_entry_in_the_way": {
       "title": "Eine gelöschte Entität blockiert die Übernahme",
-      "description": "{entity_id} kann nicht übernommen werden: Ein gelöschter Eintrag für {unique_id} käme als {restored} zurück.\n\nEntferne diesen gelöschten Eintrag endgültig und lade die Integration neu."
+      "description": "{entity_id} kann nicht übernommen werden: Home Assistant kennt noch eine gelöschte Entität für {unique_id} und würde stattdessen {restored} zurückholen.\n\nHome Assistant vergisst gelöschte Entitäten 30 Tage nach dem Entfernen und bietet keinen Weg, das früher zu tun. Warte entweder so lange, oder stoppe Home Assistant, lege eine Sicherung an und entferne den Eintrag mit der Entitäts-ID {restored} aus `deleted_entities` in `.storage/core.entity_registry`. Die Integration versucht es danach selbst erneut."
     },
     "entity_id_taken": {
       "title": "Eine Entitäts-ID konnte nicht übernommen werden",

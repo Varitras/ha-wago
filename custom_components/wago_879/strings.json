@@ -408,7 +408,7 @@
       "message": "Cannot move {entity_id} to {unique_id}: that unique id is already registered as {held_by}. Remove {held_by} first."
     },
     "removed_entry_in_the_way": {
-      "message": "Cannot keep {entity_id}: a removed entry for {unique_id} would be restored as {restored}. Purge that removed entry before setting up this meter."
+      "message": "Cannot keep {entity_id}: Home Assistant still remembers a deleted entity for {unique_id} and would bring it back as {restored}. It forgets deleted entities 30 days after their removal."
     },
     "entity_id_taken": {
       "message": "Could not keep {entity_id}: the registry gave {created}. Remove the stale entity holding that id."
@@ -431,7 +431,7 @@
     },
     "removed_entry_in_the_way": {
       "title": "A deleted entity is in the way of the migration",
-      "description": "{entity_id} cannot be kept: a deleted entry for {unique_id} would come back as {restored}.\n\nPurge that deleted entry, then reload the integration."
+      "description": "{entity_id} cannot be kept: Home Assistant still remembers a deleted entity for {unique_id} and would bring it back as {restored} instead.\n\nHome Assistant forgets deleted entities 30 days after their removal and offers no way to do it sooner. Either wait until then, or stop Home Assistant, back up, and remove the entry with the entity id {restored} from `deleted_entities` in `.storage/core.entity_registry`. The integration retries on its own."
     },
     "entity_id_taken": {
       "title": "An entity id could not be kept",
