@@ -390,5 +390,34 @@
         "name": "Wandlerverhältnis sekundär"
       }
     }
+  },
+  "exceptions": {
+    "link_settings_clash": {
+      "message": "Eine andere Integration nutzt die Adresse des Zählers bereits mit anderen Verbindungseinstellungen: {error}"
+    },
+    "meter_not_answering": {
+      "message": "Der Zähler unter {host} hat nicht geantwortet: {error}"
+    },
+    "serial_mismatch": {
+      "message": "Der Zähler unter {host} meldet die Seriennummer {found}, dieser Eintrag gehört aber zur Seriennummer {expected}. Richte den Eintrag mit „Neu konfigurieren“ auf die Adresse von Zähler {expected}, oder füge Zähler {found} als eigenen Eintrag hinzu."
+    },
+    "yaml_still_active": {
+      "message": "{entity_id} wird noch von der YAML-Modbus-Konfiguration bereitgestellt. Entferne den modbus:-Block für diesen Zähler, starte neu und richte die Integration dann erneut ein."
+    },
+    "unique_id_taken": {
+      "message": "{entity_id} kann nicht nach {unique_id} verschoben werden: Diese Unique-ID ist bereits als {held_by} registriert. Entferne zuerst {held_by}."
+    },
+    "removed_entry_in_the_way": {
+      "message": "{entity_id} kann nicht übernommen werden: Ein gelöschter Eintrag für {unique_id} würde als {restored} wiederhergestellt. Entferne diesen gelöschten Eintrag endgültig, bevor du den Zähler einrichtest."
+    },
+    "entity_id_taken": {
+      "message": "{entity_id} konnte nicht übernommen werden: Die Registry vergab {created}. Entferne die veraltete Entität, die diese ID belegt."
+    },
+    "read_timed_out": {
+      "message": "Modbus-Lesezugriff nach {seconds}s abgebrochen"
+    },
+    "read_failed": {
+      "message": "Modbus-Lesezugriff fehlgeschlagen: {error}"
+    }
   }
 }

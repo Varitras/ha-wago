@@ -15,7 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_HOST
+from .const import CONF_HOST, DOMAIN
 from .entity_descriptions import Block
 from .logging_policy import (
     UNREACHABLE_ERRORS,
@@ -63,7 +63,7 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 values = await self._read()
         except (TimeoutError, ModbusError) as err:
             self._failed_polls += 1
-            failure = _describe_failure(err, self._host)
+            failure = _failure(err, self._host)
             if self.data is not None and self._failed_polls <= FAILED_POLLS_TOLERATED:
                 _LOGGER.debug(
                     "%s: poll failed (%d of %d tolerated), keeping the last values: %s",
@@ -73,22 +73,35 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     failure,
                 )
                 return self.data
-            failed = (
-                DeviceUnreachable
-                if isinstance(err, UNREACHABLE_ERRORS)
-                else UpdateFailed
-            )
             # `from None`: core logs the full error at debug, cause included.
-            raise failed(f"{self.name}: {failure}") from None
+            raise failure from None
         self._failed_polls = 0
         return values
 
 
-def _describe_failure(err: Exception, host: str) -> str:
-    """Name a bare timeout as such; ``str(TimeoutError())`` is empty and unhelpful."""
+def _failure(err: Exception, host: str) -> UpdateFailed:
+    """What a failed poll reports; core prefixes the poller's name when it logs.
+
+    A bare timeout is named as such: ``str(TimeoutError())`` is empty.
+    """
     if isinstance(err, TimeoutError):
-        return f"Modbus read timed out after {UPDATE_TIMEOUT_SECONDS}s"
-    return f"Modbus read failed: {redact(str(err), host)}"
+        return UpdateFailed(
+            translation_domain=DOMAIN,
+            translation_key="read_timed_out",
+            translation_placeholders={"seconds": str(UPDATE_TIMEOUT_SECONDS)},
+        )
+    placeholders = {"error": redact(str(err), host)}
+    if isinstance(err, UNREACHABLE_ERRORS):
+        return DeviceUnreachable(
+            translation_domain=DOMAIN,
+            translation_key="read_failed",
+            translation_placeholders=placeholders,
+        )
+    return UpdateFailed(
+        translation_domain=DOMAIN,
+        translation_key="read_failed",
+        translation_placeholders=placeholders,
+    )
 
 
 @dataclass

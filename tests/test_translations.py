@@ -1,7 +1,9 @@
 """Every entity key and every flow message has a text in every language."""
 
+import ast
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -60,3 +62,51 @@ def test_every_form_field_explains_itself(language):
         if field not in texts.get("data_description", {})
     ]
     assert not missing, f"{language.name}: {missing}"
+
+
+# What Home Assistant shows a user or writes to the log on this package's
+# behalf; the quality scale's exception-translations rule.
+TRANSLATED_EXCEPTIONS = {
+    "ConfigEntryError",
+    "ConfigEntryNotReady",
+    "DeviceUnreachable",
+    "HomeAssistantError",
+    "UpdateFailed",
+}
+PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def _constructions():
+    """Every call of a translated exception class in the package."""
+    for source in sorted(PACKAGE.rglob("*.py")):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in TRANSLATED_EXCEPTIONS
+            ):
+                yield source.name, node
+
+
+def test_every_raised_message_is_translated():
+    messages = _load(PACKAGE / "strings.json").get("exceptions", {})
+    offenders = []
+    for name, call in _constructions():
+        keywords = {k.arg: k.value for k in call.keywords}
+        key = keywords.get("translation_key")
+        if call.args or not isinstance(key, ast.Constant):
+            offenders.append(f"{name}:{call.lineno} has no literal translation_key")
+            continue
+        if key.value not in messages:
+            offenders.append(f"{name}:{call.lineno} {key.value} not in strings.json")
+            continue
+        wanted = set(PLACEHOLDER.findall(messages[key.value]["message"]))
+        given = keywords.get("translation_placeholders")
+        if isinstance(given, ast.Dict):
+            passed = {k.value for k in given.keys if isinstance(k, ast.Constant)}
+            if passed != wanted:
+                offenders.append(
+                    f"{name}:{call.lineno} {key.value}: {passed} != {wanted}"
+                )
+    assert not offenders

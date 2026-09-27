@@ -110,15 +110,21 @@ def _resolve(hass: HomeAssistant, serial: str) -> list[Adoption]:
             EntityStateAttribute.RESTORED
         ):
             raise ConfigEntryNotReady(
-                f"{entity_id} is still served by the YAML modbus configuration. "
-                "Remove the modbus: block for this meter, restart, then set up again"
+                translation_domain=DOMAIN,
+                translation_key="yaml_still_active",
+                translation_placeholders={"entity_id": entity_id},
             )
         new_unique_id = f"{serial}_{field}"
         held_by = registry.async_get_entity_id(Platform.SENSOR, DOMAIN, new_unique_id)
         if held_by is not None:
             raise ConfigEntryNotReady(
-                f"cannot move {entity_id} to {mask(new_unique_id)}: that unique "
-                f"id is already registered as {held_by}. Remove {held_by} first"
+                translation_domain=DOMAIN,
+                translation_key="unique_id_taken",
+                translation_placeholders={
+                    "entity_id": entity_id,
+                    "unique_id": mask(new_unique_id),
+                    "held_by": held_by,
+                },
             )
         # `async_get_or_create` restores a deleted entry's own entity id before
         # it looks at `suggested_object_id`, so a removed entry for this unique
@@ -128,10 +134,13 @@ def _resolve(hass: HomeAssistant, serial: str) -> list[Adoption]:
         )
         if deleted is not None and deleted.entity_id != entity_id:
             raise ConfigEntryNotReady(
-                f"cannot keep {entity_id}: a removed entry for "
-                f"{mask(new_unique_id)} "
-                f"would be restored as {deleted.entity_id}. Purge that removed "
-                "entry before setting up this meter"
+                translation_domain=DOMAIN,
+                translation_key="removed_entry_in_the_way",
+                translation_placeholders={
+                    "entity_id": entity_id,
+                    "unique_id": mask(new_unique_id),
+                    "restored": deleted.entity_id,
+                },
             )
         adoptions.append(Adoption(registry.entities[entity_id], new_unique_id))
     return adoptions
@@ -178,8 +187,12 @@ async def async_adopt_legacy_entities(
                     legacy_entity_id,
                 )
             raise ConfigEntryNotReady(
-                f"could not keep {legacy_entity_id}: the registry gave "
-                f"{created.entity_id}. Remove the stale entity holding that id"
+                translation_domain=DOMAIN,
+                translation_key="entity_id_taken",
+                translation_placeholders={
+                    "entity_id": legacy_entity_id,
+                    "created": created.entity_id,
+                },
             )
         registry.async_update_entity(
             created.entity_id, **_user_settings(adoption.legacy)

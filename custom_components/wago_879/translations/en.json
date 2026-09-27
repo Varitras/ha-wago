@@ -390,5 +390,34 @@
         "name": "CT ratio secondary"
       }
     }
+  },
+  "exceptions": {
+    "link_settings_clash": {
+      "message": "Another integration already uses the meter's address with different link settings: {error}"
+    },
+    "meter_not_answering": {
+      "message": "The meter at {host} did not answer: {error}"
+    },
+    "serial_mismatch": {
+      "message": "The meter at {host} answers as serial {found}, but this entry belongs to serial {expected}. Point the entry at the address of meter {expected} with Reconfigure, or add meter {found} as its own entry."
+    },
+    "yaml_still_active": {
+      "message": "{entity_id} is still served by the YAML modbus configuration. Remove the modbus: block for this meter, restart, then set up again."
+    },
+    "unique_id_taken": {
+      "message": "Cannot move {entity_id} to {unique_id}: that unique id is already registered as {held_by}. Remove {held_by} first."
+    },
+    "removed_entry_in_the_way": {
+      "message": "Cannot keep {entity_id}: a removed entry for {unique_id} would be restored as {restored}. Purge that removed entry before setting up this meter."
+    },
+    "entity_id_taken": {
+      "message": "Could not keep {entity_id}: the registry gave {created}. Remove the stale entity holding that id."
+    },
+    "read_timed_out": {
+      "message": "Modbus read timed out after {seconds}s"
+    },
+    "read_failed": {
+      "message": "Modbus read failed: {error}"
+    }
   }
 }

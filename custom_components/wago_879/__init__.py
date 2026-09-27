@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_MEASUREMENT_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
+    DOMAIN,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
@@ -61,12 +62,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
         # configurations, so the user has to see the helper's own message.
         # `from None` here and below: core writes the setup error with the
         # full traceback, and a chained cause would carry the unmasked text.
-        raise ConfigEntryError(redact(str(err), host)) from None
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="link_settings_clash",
+            translation_placeholders={"error": redact(str(err), host)},
+        ) from None
     meter = WagoMeter(unit)
     try:
         identity = await meter.async_read_identity()
     except ModbusError as err:
-        raise ConfigEntryNotReady(f"{mask(host)}: {redact(str(err), host)}") from None
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="meter_not_answering",
+            translation_placeholders={
+                "host": mask(host),
+                "error": redact(str(err), host),
+            },
+        ) from None
     serial = meter.serial_number
     assert serial is not None
     # Before adoption, the first refresh and the platforms: the device and every
@@ -77,11 +89,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     # flow always sets one, so that is only a hand-made entry.
     if entry.unique_id is not None and entry.unique_id != serial:
         raise ConfigEntryError(
-            f"The meter at {mask(host)} answers as serial "
-            f"{mask(serial)}, but this entry belongs to serial "
-            f"{mask(entry.unique_id)}. Point the entry at the address of meter "
-            f"{mask(entry.unique_id)} with Reconfigure, or add meter "
-            f"{mask(serial)} as its own entry."
+            translation_domain=DOMAIN,
+            translation_key="serial_mismatch",
+            translation_placeholders={
+                "host": mask(host),
+                "found": mask(serial),
+                "expected": mask(entry.unique_id),
+            },
         )
 
     await migration.async_adopt_legacy_entities(hass, entry, serial)
