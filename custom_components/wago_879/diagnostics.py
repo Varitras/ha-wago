@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_HOST
@@ -20,9 +21,7 @@ TO_REDACT = {CONF_HOST, "serial_number", "unique_id"}
 
 def _poller(coordinator: WagoCoordinator) -> dict[str, Any]:
     return {
-        "update_interval_seconds": coordinator.update_interval.total_seconds()
-        if coordinator.update_interval
-        else None,
+        "update_interval": str(coordinator.update_interval),
         "last_update_success": coordinator.last_update_success,
         "data": coordinator.data,
     }
@@ -31,19 +30,21 @@ def _poller(coordinator: WagoCoordinator) -> dict[str, Any]:
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: WagoConfigEntry
 ) -> dict[str, Any]:
-    """Entry settings, the identity read at setup, and both pollers."""
-    runtime = entry.runtime_data
-    return async_redact_data(
-        {
-            "entry": {
-                "title": entry.title,
-                "unique_id": entry.unique_id,
-                "data": dict(entry.data),
-                "options": dict(entry.options),
-            },
-            "identity": runtime.identity,
-            "measurements": _poller(runtime.measurements),
-            "energy": _poller(runtime.energy),
-        },
-        TO_REDACT,
-    )
+    """Entry settings, and once loaded the identity and both pollers."""
+    diagnostics: dict[str, Any] = {
+        "entry": {
+            "title": entry.title,
+            "state": entry.state.value,
+            "unique_id": entry.unique_id,
+            "data": dict(entry.data),
+            "options": dict(entry.options),
+        }
+    }
+    # Only a loaded entry has runtime data - and a retrying one is exactly
+    # the entry a user downloads diagnostics for.
+    if entry.state is ConfigEntryState.LOADED:
+        runtime = entry.runtime_data
+        diagnostics["identity"] = runtime.identity
+        diagnostics["measurements"] = _poller(runtime.measurements)
+        diagnostics["energy"] = _poller(runtime.energy)
+    return async_redact_data(diagnostics, TO_REDACT)

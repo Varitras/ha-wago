@@ -6,8 +6,11 @@ import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
 
+from modbus_connection import ModbusConnectionError
+
 from custom_components.wago_879.const import CONF_HOST
 from custom_components.wago_879.diagnostics import async_get_config_entry_diagnostics
+from homeassistant.config_entries import ConfigEntryState
 
 from .test_e2e import BASE_DATA, SERIAL, _entry, _setup, holding
 
@@ -39,3 +42,17 @@ async def test_diagnostics_carry_the_readings_without_address_or_serial(hass):
     assert SERIAL not in text
     # The identity block holds the serial as the meter sends it: a number.
     assert str(int(SERIAL, 16)) not in text
+
+
+async def test_diagnostics_of_an_entry_that_is_not_loaded(hass, mock_modbus):
+    """A retrying entry is exactly the one a user asks about; it has no
+    runtime data, and the download may not fail for lack of it."""
+    mock_modbus.fail_requests(ModbusConnectionError("down"))
+    entry = _entry(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert diagnostics["entry"]["state"] == ConfigEntryState.SETUP_RETRY.value
+    assert "measurements" not in diagnostics
+    assert BASE_DATA[CONF_HOST] not in json.dumps(diagnostics)
