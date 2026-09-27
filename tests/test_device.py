@@ -7,7 +7,7 @@ from modbus_connection import ModbusConnectionError
 from modbus_connection.mock import MockModbusConnection
 import pytest
 
-from custom_components.wago_879.wago_879_api.device import WagoMeter
+from custom_components.wago_879.wago_879_api.device import UnsupportedMeter, WagoMeter
 from custom_components.wago_879.wago_879_api.registers import (
     ENERGY_FIELDS,
     MEASUREMENT_FIELDS,
@@ -69,7 +69,9 @@ async def test_nan_from_the_meter_becomes_none(unit):
 
 
 async def test_identity_exposes_the_serial_as_hex(unit):
-    unit.load_raw({"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4003: 1}})
+    unit.load_raw(
+        {"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: 0x1111, 0x4003: 1}}
+    )
     meter = WagoMeter(unit)
 
     identity = await meter.async_read_identity()
@@ -88,3 +90,32 @@ async def test_a_link_error_propagates(unit):
 
     with pytest.raises(ModbusConnectionError):
         await meter.async_update_measurements()
+
+
+@pytest.mark.parametrize("value", [math.inf, -math.inf])
+async def test_an_infinite_reading_becomes_none(unit, value):
+    """Home Assistant refuses a non-finite sensor value outright: the entity
+    kept its last state while the poll counted as a success."""
+    unit.load_raw(_holding({0x5008: value, 0x6000: value}))
+    meter = WagoMeter(unit)
+
+    assert (await meter.async_update_measurements())["frequency"] is None
+    assert (await meter.async_update_energy())["active_energy_total"] is None
+
+
+@pytest.mark.parametrize("code", [0x1111, 0x1112, 0x1113])
+async def test_every_documented_variant_is_accepted(unit, code):
+    unit.load_raw({"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: code}})
+    await WagoMeter(unit).async_read_identity()
+
+
+async def test_a_meter_code_the_manual_does_not_list_is_refused(unit):
+    """Something answering the register layout is not yet a WAGO 879: its
+    readings would be read against a map that is not its own."""
+    unit.load_raw({"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: 0x9999}})
+    meter = WagoMeter(unit)
+
+    with pytest.raises(UnsupportedMeter) as caught:
+        await meter.async_read_identity()
+    assert caught.value.meter_code == 0x9999
+    assert meter.serial_number is None

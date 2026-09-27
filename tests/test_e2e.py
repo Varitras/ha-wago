@@ -50,7 +50,7 @@ def words(value: float) -> dict[int, int]:
 
 
 def holding(values: dict[int, float]) -> dict[str, dict[int, int]]:
-    out: dict[int, int] = {0x4000: 0x0012, 0x4001: 0x3456}
+    out: dict[int, int] = {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: 0x1111}
     for address, value in values.items():
         for offset, word in words(value).items():
             out[address + offset] = word
@@ -168,7 +168,7 @@ async def test_setup_refuses_a_meter_with_another_serial(hass, meter):
     that was just read: loading anyway would bind the entry - and the history
     behind its entity ids - to a different physical meter.
     """
-    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765}})
+    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765, 0x4002: 0x1111}})
     entry = _entry(hass)
 
     assert not await hass.config_entries.async_setup(entry.entry_id)
@@ -277,7 +277,7 @@ async def test_a_refused_identity_read_keeps_the_address_out_of_the_log(
 
 async def test_a_serial_mismatch_keeps_the_address_out_of_the_log(hass, meter, caplog):
     caplog.set_level(logging.DEBUG)
-    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765}})
+    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765, 0x4002: 0x1111}})
     entry = _entry(hass)
 
     assert not await hass.config_entries.async_setup(entry.entry_id)
@@ -364,3 +364,26 @@ async def test_a_failed_first_refresh_names_the_poller_that_failed(hass, meter):
 
     assert entry.state is ConfigEntryState.SETUP_RETRY
     assert "measurements" in entry.reason
+
+
+async def test_setup_refuses_a_device_that_is_no_wago_879(hass, meter):
+    """No retry turns another device into this meter."""
+    meter.load_raw({"holding": {0x4002: 0x9999}})
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert "0x9999" in entry.reason
+
+
+async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, meter):
+    """The versions arrive as float32: 1.34 decodes to 1.340000033378601."""
+    meter.load_raw(holding({0x4007: 1.34, 0x4009: 1.23}))
+    entry = await _setup(hass, _entry(hass))
+
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, SERIAL), entry.entry_id
+    )
+    assert device.sw_version == "1.34"
+    assert device.hw_version == "1.23"

@@ -49,11 +49,15 @@ read at setup but not surfaced.
 
 - **Tested:** the WAGO 879-3000 in its 4PU variant (direct measuring, meter
   code 1111) behind an 879-9000 module, over Modbus TCP.
-- **Expected to work, untested:** the 4PS and 2PU CT variants. WAGO documents
-  one register map for all three; a variant that fills registers the 4PU
-  leaves empty gets the matching sensors (voltage and current average, CT
-  ratio), see [Entity visibility](#entity-visibility).
-- **Not supported:** other WAGO meters, and the 879-9000 over Modbus RTU.
+- **Expected to work, untested:** the other meters WAGO lists for the
+  879-9000 module - 879-3001 (4PU, MID), 879-3020 and 879-3021 (4PS, the
+  latter MID) and 879-3040 (2PU CT). WAGO documents one register map for the
+  4PU, 4PS and 2PU CT variants; a variant that fills registers the 4PU leaves
+  empty gets the matching sensors (voltage and current average, CT ratio),
+  see [Entity visibility](#entity-visibility). Setup refuses a device whose
+  meter code is none of these three variants.
+- **Not supported:** other WAGO meters, other Modbus RTU devices behind the
+  module's RS-485 port, and the 879-9000 over Modbus RTU.
 
 ## Use cases
 
@@ -191,6 +195,11 @@ meter whose link is down is logged at *info*, not as an error.
   needs the integration reloaded.
 - **One meter per entry**; several meters mean several entries, each with
   its own host or unit id.
+- **At most four Modbus TCP connections** per 879-9000 module, according to
+  WAGO's data sheet. Home Assistant uses one per module; every other program
+  polling the same module takes one of the remaining three.
+- **No discovery.** The module announces itself to WAGO's own configuration
+  tool only, so it has to be added by address.
 
 ## Troubleshooting
 
@@ -248,7 +257,7 @@ that has drifted end up equal either way.
 
 ## Running the gates
 
-Every gate this repository ships runs through one script:
+Every gate that can run locally runs through one script:
 
 ```sh
 PYTHON=/path/to/venv/bin/python .github/scripts/check.sh
@@ -271,8 +280,15 @@ Without `MIN_HA_PYTHON` that run is skipped, and the script's final line says
 so - a skipped gate that announces itself is honest, one that passes silently
 is not.
 
+Three more checks run **only on GitHub**, because they need its runners or
+actions: HACS validation (`validate.yml`), hassfest (`hassfest.yaml`) and
+CodeQL (`codeql.yml`). A green `check.sh` therefore says nothing about them.
+
+CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs,
+always against both Home Assistant versions, plus those three - on every push
+to a branch other than Dependabot's and on every pull request; HACS
+validation and hassfest also run nightly, CodeQL weekly.
+
 A fresh clone of this repository has **no pre-push hook** - the hook is a
-local, untracked convenience, not part of the repository. CI (see
-`.github/workflows/`) runs the same gates as `check.sh` on every push and
-pull request, and is the portable twin every clone gets regardless of local
-setup.
+local, untracked convenience, not part of the repository. CI is the portable
+twin every clone gets regardless of local setup.

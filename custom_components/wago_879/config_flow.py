@@ -35,8 +35,8 @@ from .const import (
     INTERVAL_MIN_SECONDS,
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
-from .sensor import device_name
-from .wago_879_api.device import WagoMeter
+from .sensor import device_name, entry_title
+from .wago_879_api.device import UnsupportedMeter, WagoMeter
 
 PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
@@ -143,6 +143,8 @@ async def probe_serial(
             await meter.async_read_identity()
     except _PROBE_FAILURES:
         return None, "cannot_connect"
+    except UnsupportedMeter:
+        return None, "unsupported_meter"
     except HomeAssistantError:
         # The only HomeAssistantError the helper raises: another consumer holds
         # this endpoint with link settings that cannot both be honoured. The
@@ -212,6 +214,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors, serial = await self._validate(user_input)
             if not errors:
+                assert serial is not None
                 await self.async_set_unique_id(serial)
                 self._abort_if_unique_id_mismatch()
                 # Read before the update: the listener runs eagerly inside
@@ -222,8 +225,12 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # its own on top of the one the entry's update listener already
                 # performs, so the Modbus unit would be torn down and rebuilt
                 # twice. Core reports that combination and drops it in 2026.12.
+                # The old address is known only here: setup compares the title
+                # with the saved host, which this update is about to replace.
                 self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, **user_input}
+                    entry,
+                    data={**entry.data, **user_input},
+                    title=entry_title(entry.title, entry.data[CONF_HOST], serial),
                 )
                 if not reloads_itself:
                     # Only a successful setup registers the listener, so an

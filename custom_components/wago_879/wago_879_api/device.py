@@ -19,14 +19,29 @@ from .registers import (
 
 SERIAL_HEX_DIGITS = 8
 
+# The meter codes the manual (appendix A3.2, register 0x4002) lists for the
+# variants sharing this register map: 4PU, 4PS and 2PU CT.
+SUPPORTED_METER_CODES = frozenset({0x1111, 0x1112, 0x1113})
+
+
+class UnsupportedMeter(Exception):
+    """The device answers, but not with a meter code this register map is for."""
+
+    def __init__(self, meter_code: int) -> None:
+        """Keep the code the device reported."""
+        super().__init__(f"meter code 0x{meter_code:04X}")
+        self.meter_code = meter_code
+
 
 def _values(component: Component, names: tuple[str, ...]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for name in names:
         value = getattr(component, name)
-        # The meter reports an unavailable measurement as NaN; None is what an
-        # entity can show as unknown, NaN is not.
-        result[name] = None if isinstance(value, float) and math.isnan(value) else value
+        # The meter reports an unavailable measurement as NaN, and a float
+        # register can hold an infinity; None is what an entity can show as
+        # unknown, Home Assistant refuses a non-finite state outright.
+        is_unusable = isinstance(value, float) and not math.isfinite(value)
+        result[name] = None if is_unusable else value
     return result
 
 
@@ -46,9 +61,15 @@ class WagoMeter:
         return self._serial_number
 
     async def async_read_identity(self) -> dict[str, Any]:
-        """Read the 0x4000 block; raises ModbusError on a link problem."""
+        """Read the 0x4000 block.
+
+        Raises ModbusError on a link problem and UnsupportedMeter when the
+        device is not one of the meters this register map describes.
+        """
         await self._identity.async_update()
         values = _values(self._identity, IDENTITY_FIELDS)
+        if values["meter_code"] not in SUPPORTED_METER_CODES:
+            raise UnsupportedMeter(values["meter_code"])
         self._serial_number = f"{values['serial_number']:0{SERIAL_HEX_DIGITS}X}"
         return values
 

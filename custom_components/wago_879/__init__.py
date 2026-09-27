@@ -33,8 +33,8 @@ from .const import (
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
-from .sensor import device_name
-from .wago_879_api.device import WagoMeter
+from .sensor import entry_title
+from .wago_879_api.device import UnsupportedMeter, WagoMeter
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -55,13 +55,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     # - does not leave it claiming an obstacle that may be gone.
     ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
     host = str(entry.data[CONF_HOST])
-    # Core logs the title on every setup failure - "Error setting up entry
-    # <title>" - and earlier versions titled the entry with the address. Done
-    # before anything can fail, keyed on the serial the entry belongs to; a
-    # title the user chose is not the address and stays.
-    if entry.unique_id is not None and entry.title == host:
+    # Before anything can fail: core logs the title on every setup failure.
+    # Keyed on the serial the entry belongs to, not on one read just now.
+    if entry.unique_id is not None:
         hass.config_entries.async_update_entry(
-            entry, title=device_name(entry.unique_id)
+            entry, title=entry_title(entry.title, host, entry.unique_id)
         )
     params = ModbusTcpParams(host=host, port=_setting(entry, CONF_PORT, DEFAULT_PORT))
     try:
@@ -90,6 +88,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
                 "host": mask(host),
                 "error": redact(str(err), host),
             },
+        ) from None
+    except UnsupportedMeter as err:
+        # Not ConfigEntryNotReady: no retry turns another device into this meter.
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="unsupported_meter",
+            translation_placeholders={"meter_code": f"0x{err.meter_code:04X}"},
         ) from None
     serial = meter.serial_number
     assert serial is not None

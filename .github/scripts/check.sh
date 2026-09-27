@@ -1,9 +1,11 @@
 #!/bin/sh
-# Every gate this repository ships, in one command.
+# Every gate that can run locally, in one command.
 #
 # Run this before calling a change done; CI runs the same set, and a guard in
-# tests/test_guards.py fails if the two ever drift apart. The order is cheap to
-# expensive, stopping at the first failure.
+# tests/test_guards.py fails if the two ever drift apart. CI also runs HACS
+# validation, hassfest and CodeQL, which exist only as GitHub workflows - a
+# green run here does not cover them. The order is cheap to expensive,
+# stopping at the first failure.
 #
 # Anything machine-local arrives through the environment, never as a path in
 # this file:

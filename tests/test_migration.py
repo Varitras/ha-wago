@@ -68,6 +68,7 @@ def _holding() -> dict[str, dict[int, int]]:
         "holding": {
             0x4000: 0x0012,
             0x4001: 0x3456,
+            0x4002: 0x1111,
             0x6000: int.from_bytes(raw[:2], "big"),
             0x6001: int.from_bytes(raw[2:], "big"),
         }
