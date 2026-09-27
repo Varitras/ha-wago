@@ -82,5 +82,12 @@
     "old": "        if not _is_populated(description, runtime):\n            continue\n",
     "new": "",
     "tests": "a_register_the_meter_leaves_empty_gets_no_sensor"
+  },
+  {
+    "label": "diagnostics: the address must be redacted",
+    "path": "custom_components/wago_879/diagnostics.py",
+    "old": "TO_REDACT = {CONF_HOST, \"serial_number\", \"unique_id\"}\n",
+    "new": "TO_REDACT = {\"serial_number\", \"unique_id\"}\n",
+    "tests": "diagnostics_carry_the_readings_without_address_or_serial"
   }
 ]
