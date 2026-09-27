@@ -28,6 +28,8 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
+    INTERVAL_FIELDS,
+    INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
@@ -181,3 +183,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> boo
 async def async_remove_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
     """A deleted entry has nothing left to repair."""
     ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
+    """1.1 -> 1.2: the poll intervals move from data to options.
+
+    Options set since win - they are what the user chose last.
+    """
+    if entry.version > 1:
+        return False
+    if entry.minor_version < INTERVALS_IN_OPTIONS_MINOR_VERSION:
+        data = dict(entry.data)
+        moved = {key: data.pop(key) for key in INTERVAL_FIELDS if key in data}
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options={**moved, **entry.options},
+            minor_version=INTERVALS_IN_OPTIONS_MINOR_VERSION,
+        )
+    return True

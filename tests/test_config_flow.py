@@ -18,6 +18,7 @@ from custom_components.wago_879.const import (
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import NumberSelector, TextSelector
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -59,7 +60,13 @@ async def test_the_user_step_creates_an_entry_keyed_by_serial(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "WAGO 3456"
-    assert result["data"] == USER_INPUT
+    # The quality scale's config-flow rule: what the connection needs goes to
+    # data, every other setting to options.
+    assert result["data"] == {CONF_HOST: HOST, CONF_PORT: 502, CONF_UNIT_ID: 1}
+    assert result["options"] == {
+        CONF_MEASUREMENT_INTERVAL: 15,
+        CONF_ENERGY_INTERVAL: 300,
+    }
     assert result["result"].unique_id == SERIAL
 
 
@@ -230,3 +237,57 @@ async def test_reconfigure_against_a_different_meter_does_not_rebind_the_entry(
     assert result["reason"] == "unique_id_mismatch"
     assert entry.data == USER_INPUT
     assert entry.unique_id == SERIAL
+
+
+async def test_the_form_uses_selectors(hass):
+    """The quality scale's config-flow rule asks for the right selector per
+    field: a number box with its range, not a bare text field."""
+    started = await _start(hass)
+    fields = {str(key): value for key, value in started["data_schema"].schema.items()}
+
+    assert isinstance(fields[CONF_HOST], TextSelector)
+    for number in (
+        CONF_PORT,
+        CONF_UNIT_ID,
+        CONF_MEASUREMENT_INTERVAL,
+        CONF_ENERGY_INTERVAL,
+    ):
+        assert isinstance(fields[number], NumberSelector), number
+
+
+async def test_numbers_from_the_form_are_stored_as_integers(hass):
+    """A number selector hands over floats; a port of 502.0 is no port."""
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"],
+        {
+            **USER_INPUT,
+            CONF_PORT: 502.0,
+            CONF_UNIT_ID: 1.0,
+            CONF_MEASUREMENT_INTERVAL: 15.0,
+            CONF_ENERGY_INTERVAL: 300.0,
+        },
+    )
+
+    stored = {**result["data"], **result["options"]}
+    assert all(type(stored[key]) is int for key in stored if key != CONF_HOST)
+
+
+async def test_an_entry_from_an_earlier_version_moves_its_intervals_to_options(hass):
+    """Version 1.1 entries kept the intervals in data; options set later win."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={CONF_ENERGY_INTERVAL: 600},
+        unique_id=SERIAL,
+        version=1,
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.minor_version == 2
+    assert entry.data == {CONF_HOST: HOST, CONF_PORT: 502, CONF_UNIT_ID: 1}
+    assert entry.options == {CONF_MEASUREMENT_INTERVAL: 15, CONF_ENERGY_INTERVAL: 600}

@@ -17,17 +17,27 @@ DEFAULT_ENERGY_INTERVAL = 300
 INTERVAL_MIN_SECONDS = 5
 INTERVAL_MAX_SECONDS = 3600
 
+# What the connection needs lives in the entry's data, every other setting in
+# its options - the quality scale's config-flow rule.
+CONNECTION_FIELDS = (CONF_HOST, CONF_PORT, CONF_UNIT_ID)
+INTERVAL_FIELDS = (CONF_MEASUREMENT_INTERVAL, CONF_ENERGY_INTERVAL)
+# The config entry minor version from which the intervals live in options.
+INTERVALS_IN_OPTIONS_MINOR_VERSION = 2
+
 __all__ = [
     "CONF_ENERGY_INTERVAL",
     "CONF_HOST",
     "CONF_MEASUREMENT_INTERVAL",
     "CONF_PORT",
     "CONF_UNIT_ID",
+    "CONNECTION_FIELDS",
     "DEFAULT_ENERGY_INTERVAL",
     "DEFAULT_MEASUREMENT_INTERVAL",
     "DEFAULT_PORT",
     "DEFAULT_UNIT_ID",
     "DOMAIN",
+    "INTERVALS_IN_OPTIONS_MINOR_VERSION",
+    "INTERVAL_FIELDS",
     "INTERVAL_MAX_SECONDS",
     "INTERVAL_MIN_SECONDS",
 ]

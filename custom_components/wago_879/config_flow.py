@@ -11,7 +11,12 @@ from homeassistant import config_entries
 from homeassistant.components.modbus import async_get_temporary_unit
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+)
 
 from .const import (
     CONF_ENERGY_INTERVAL,
@@ -19,21 +24,24 @@ from .const import (
     CONF_MEASUREMENT_INTERVAL,
     CONF_PORT,
     CONF_UNIT_ID,
+    CONNECTION_FIELDS,
     DEFAULT_ENERGY_INTERVAL,
     DEFAULT_MEASUREMENT_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
     DOMAIN,
+    INTERVAL_FIELDS,
     INTERVAL_MAX_SECONDS,
     INTERVAL_MIN_SECONDS,
+    INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .sensor import device_name
 from .wago_879_api.device import WagoMeter
 
-_interval = vol.All(
-    vol.Coerce(int), vol.Range(min=INTERVAL_MIN_SECONDS, max=INTERVAL_MAX_SECONDS)
-)
-_unit_id = vol.All(vol.Coerce(int), vol.Range(min=1, max=247))
+PORT_MAX = 65535
+# The highest address a Modbus unit can have; 0 is broadcast.
+UNIT_ID_MAX = 247
+SECONDS = "s"
 # Named tuple, not an inline literal in the `except` clause: at this project's
 # `target-version = "py314"` the formatter drops the parentheses (PEP 758
 # allows that from 3.14 on), and the file then no longer parses under the
@@ -42,13 +50,43 @@ _unit_id = vol.All(vol.Coerce(int), vol.Range(min=1, max=247))
 _PROBE_FAILURES = (ModbusError, TimeoutError)
 
 
+def _whole_number(minimum: int, maximum: int) -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=minimum, max=maximum, step=1, mode=NumberSelectorMode.BOX
+        )
+    )
+
+
+def _seconds(minimum: int, maximum: int) -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=minimum,
+            max=maximum,
+            step=1,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement=SECONDS,
+        )
+    )
+
+
+def _as_integers(user_input: dict[str, Any]) -> dict[str, Any]:
+    """The form's numbers as integers: a number selector hands over floats."""
+    return {
+        key: value if key == CONF_HOST else int(value)
+        for key, value in user_input.items()
+    }
+
+
 def _connection_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
     return {
-        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
-        vol.Required(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): cv.port,
+        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): TextSelector(),
+        vol.Required(
+            CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)
+        ): _whole_number(1, PORT_MAX),
         vol.Required(
             CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)
-        ): _unit_id,
+        ): _whole_number(1, UNIT_ID_MAX),
     }
 
 
@@ -59,11 +97,11 @@ def _interval_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
             default=defaults.get(
                 CONF_MEASUREMENT_INTERVAL, DEFAULT_MEASUREMENT_INTERVAL
             ),
-        ): _interval,
+        ): _seconds(INTERVAL_MIN_SECONDS, INTERVAL_MAX_SECONDS),
         vol.Required(
             CONF_ENERGY_INTERVAL,
             default=defaults.get(CONF_ENERGY_INTERVAL, DEFAULT_ENERGY_INTERVAL),
-        ): _interval,
+        ): _seconds(INTERVAL_MIN_SECONDS, INTERVAL_MAX_SECONDS),
     }
 
 
@@ -102,6 +140,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Host, port, unit id and the two intervals."""
 
     VERSION = 1
+    MINOR_VERSION = INTERVALS_IN_OPTIONS_MINOR_VERSION
 
     @staticmethod
     @callback
@@ -115,6 +154,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = normalised_host(user_input)
         if host is None:
             return {"base": "invalid_host"}, None
+        user_input.update(_as_integers(user_input))
         user_input[CONF_HOST] = host
         serial, error = await probe_serial(self.hass, user_input)
         if error is not None:
@@ -133,7 +173,9 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(serial)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=device_name(serial), data=user_input
+                    title=device_name(serial),
+                    data={key: user_input[key] for key in CONNECTION_FIELDS},
+                    options={key: user_input[key] for key in INTERVAL_FIELDS},
                 )
         schema = vol.Schema(
             {
@@ -186,7 +228,7 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """The one options page."""
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            return self.async_create_entry(data=_as_integers(user_input))
         current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init", data_schema=vol.Schema(_interval_schema(current))
