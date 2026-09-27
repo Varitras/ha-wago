@@ -160,7 +160,10 @@ async def test_a_slow_read_before_any_value_raises_with_timeout_wording(
     with pytest.raises(UpdateFailed) as caught:
         await poller._async_update_data()
     assert caught.value.translation_key == "read_timed_out"
-    assert caught.value.translation_placeholders == {"seconds": "0.01"}
+    assert caught.value.translation_placeholders == {
+        "poller": "test",
+        "seconds": "0.01",
+    }
 
 
 def test_coordinator_for_maps_each_block_to_its_own_poller():

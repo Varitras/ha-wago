@@ -414,10 +414,10 @@
       "message": "{entity_id} konnte nicht übernommen werden: Die Registry vergab {created}. Entferne die veraltete Entität, die diese ID belegt."
     },
     "read_timed_out": {
-      "message": "Modbus-Lesezugriff nach {seconds}s abgebrochen"
+      "message": "{poller}: Modbus-Lesezugriff nach {seconds}s abgebrochen"
     },
     "read_failed": {
-      "message": "Modbus-Lesezugriff fehlgeschlagen: {error}"
+      "message": "{poller}: Modbus-Lesezugriff fehlgeschlagen: {error}"
     }
   },
   "issues": {

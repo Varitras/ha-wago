@@ -414,10 +414,10 @@
       "message": "Could not keep {entity_id}: the registry gave {created}. Remove the stale entity holding that id."
     },
     "read_timed_out": {
-      "message": "Modbus read timed out after {seconds}s"
+      "message": "{poller}: Modbus read timed out after {seconds}s"
     },
     "read_failed": {
-      "message": "Modbus read failed: {error}"
+      "message": "{poller}: Modbus read failed: {error}"
     }
   },
   "issues": {

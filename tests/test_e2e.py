@@ -333,3 +333,15 @@ async def test_a_register_the_meter_fills_gets_its_sensor(hass, meter):
 
     created = _unique_ids(hass, entry)
     assert {f"{SERIAL}_{field}" for field in GREY_FIELDS} <= created
+
+
+async def test_a_failed_first_refresh_names_the_poller_that_failed(hass, meter):
+    """Core rebuilds the setup error from the translation, so the name has to
+    be a placeholder of it - the "Error fetching" prefix is only in the log."""
+    meter.fail_read_band(0x5002)
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert "measurements" in entry.reason

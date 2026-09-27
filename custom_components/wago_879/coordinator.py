@@ -63,7 +63,7 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 values = await self._read()
         except (TimeoutError, ModbusError) as err:
             self._failed_polls += 1
-            failure = _failure(err, self._host)
+            failure = _failure(err, self._host, self.name)
             if self.data is not None and self._failed_polls <= FAILED_POLLS_TOLERATED:
                 _LOGGER.debug(
                     "%s: poll failed (%d of %d tolerated), keeping the last values: %s",
@@ -79,28 +79,34 @@ class WagoCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return values
 
 
-def _failure(err: Exception, host: str) -> UpdateFailed:
-    """What a failed poll reports; core prefixes the poller's name when it logs.
+def _failure(err: Exception, host: str, poller: str) -> UpdateFailed:
+    """What a failed poll reports, naming the poller.
 
-    A bare timeout is named as such: ``str(TimeoutError())`` is empty.
+    The name is repeated in core's own "Error fetching <name> data" log line,
+    but a failed first refresh becomes the entry's setup message, rebuilt from
+    this translation alone - without the name it would not say which block
+    failed. A bare timeout is named as such: ``str(TimeoutError())`` is empty.
     """
     if isinstance(err, TimeoutError):
         return UpdateFailed(
             translation_domain=DOMAIN,
             translation_key="read_timed_out",
-            translation_placeholders={"seconds": str(UPDATE_TIMEOUT_SECONDS)},
+            translation_placeholders={
+                "poller": poller,
+                "seconds": str(UPDATE_TIMEOUT_SECONDS),
+            },
         )
-    placeholders = {"error": redact(str(err), host)}
+    error = redact(str(err), host)
     if isinstance(err, UNREACHABLE_ERRORS):
         return DeviceUnreachable(
             translation_domain=DOMAIN,
             translation_key="read_failed",
-            translation_placeholders=placeholders,
+            translation_placeholders={"poller": poller, "error": error},
         )
     return UpdateFailed(
         translation_domain=DOMAIN,
         translation_key="read_failed",
-        translation_placeholders=placeholders,
+        translation_placeholders={"poller": poller, "error": error},
     )
 
 
