@@ -419,5 +419,23 @@
     "read_failed": {
       "message": "Modbus read failed: {error}"
     }
+  },
+  "issues": {
+    "yaml_still_active": {
+      "title": "The YAML modbus block still serves this meter",
+      "description": "{entity_id} is still served by the YAML `modbus:` configuration, so its history cannot move to this integration yet.\n\nRemove the `modbus:` block for this meter from your configuration and restart Home Assistant. The integration then takes the entity ids over by itself."
+    },
+    "unique_id_taken": {
+      "title": "A meter entity is in the way of the migration",
+      "description": "{entity_id} cannot move to {unique_id}: that unique id is already registered as {held_by}.\n\nRemove {held_by} under Settings -> Entities. The integration retries on its own."
+    },
+    "removed_entry_in_the_way": {
+      "title": "A deleted entity is in the way of the migration",
+      "description": "{entity_id} cannot be kept: a deleted entry for {unique_id} would come back as {restored}.\n\nPurge that deleted entry, then reload the integration."
+    },
+    "entity_id_taken": {
+      "title": "An entity id could not be kept",
+      "description": "{entity_id} could not be kept: the registry gave {created}.\n\nRemove the stale entity holding {entity_id}, then reload the integration."
+    }
   }
 }

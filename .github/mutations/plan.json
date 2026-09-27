@@ -89,5 +89,12 @@
     "old": "TO_REDACT = {CONF_HOST, \"serial_number\", \"unique_id\"}\n",
     "new": "TO_REDACT = {\"serial_number\", \"unique_id\"}\n",
     "tests": "diagnostics_carry_the_readings_without_address_or_serial"
+  },
+  {
+    "label": "repairs: a resolved adoption must clear its repair issue",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "    ir.async_delete_issue(hass, DOMAIN, blocked)\n",
+    "new": "",
+    "tests": "a_blocked_adoption_is_a_repair_until_it_goes_through"
   }
 ]

@@ -35,6 +35,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import (
     area_registry as ar,
     entity_registry as er,
+    issue_registry as ir,
     label_registry as lr,
 )
 from homeassistant.util import dt as dt_util
@@ -167,6 +168,42 @@ async def test_a_live_legacy_entity_refuses_setup(hass):
         )
         is not None
     )
+
+
+async def test_a_blocked_adoption_is_a_repair_until_it_goes_through(hass):
+    """A retrying entry is easy to miss; the repairs panel is where Home
+    Assistant asks the user to act. Once the block is gone, so is the issue."""
+    _legacy_entry(hass)
+    hass.states.async_set(LEGACY_ENTITY_ID, "1.0")
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    issues = ir.async_get(hass)
+    issue = issues.async_get_issue(DOMAIN, f"adoption_blocked_{entry.entry_id}")
+    assert issue is not None
+    assert issue.translation_key == "yaml_still_active"
+    assert issue.translation_placeholders == {"entity_id": LEGACY_ENTITY_ID}
+
+    hass.states.async_remove(LEGACY_ENTITY_ID)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert issues.async_get_issue(DOMAIN, f"adoption_blocked_{entry.entry_id}") is None
+
+
+async def test_removing_the_entry_takes_its_repair_issue_along(hass):
+    _legacy_entry(hass)
+    hass.states.async_set(LEGACY_ENTITY_ID, "1.0")
+    entry = _entry(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    issue_id = f"adoption_blocked_{entry.entry_id}"
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 
 
 @pytest.mark.parametrize("registry_state", ["restored", "cleared", "live_unavailable"])

@@ -125,3 +125,24 @@ def test_every_sensor_without_a_device_class_has_an_icon():
     ]
     assert not unnamed
     assert set(icons) <= keys
+
+
+def test_every_refused_adoption_has_a_repair_text():
+    """Setup turns a refused adoption into a repair issue with the refusal's
+    own key and placeholders, so each one needs a title and description that
+    use exactly those placeholders."""
+    strings = _load(PACKAGE / "strings.json")
+    issues = strings.get("issues", {})
+    offenders = []
+    for name, call in _constructions():
+        if name != "migration.py":
+            continue
+        key = next(k.value.value for k in call.keywords if k.arg == "translation_key")
+        wanted = set(PLACEHOLDER.findall(strings["exceptions"][key]["message"]))
+        if key not in issues:
+            offenders.append(f"{key}: no repair text")
+            continue
+        used = set(PLACEHOLDER.findall(issues[key]["description"]))
+        if used != wanted:
+            offenders.append(f"{key}: {used} != {wanted}")
+    assert not offenders

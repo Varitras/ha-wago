@@ -14,6 +14,7 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
 )
+from homeassistant.helpers import issue_registry as ir
 
 from . import entity_id_rename, migration
 from .const import (
@@ -34,6 +35,11 @@ from .sensor import device_name
 from .wago_879_api.device import WagoMeter
 
 PLATFORMS = [Platform.SENSOR]
+
+
+def _adoption_blocked(entry: WagoConfigEntry) -> str:
+    """The repair issue a refused adoption raises for `entry`."""
+    return f"adoption_blocked_{entry.entry_id}"
 
 
 def _setting(entry: WagoConfigEntry, key: str, default: int) -> int:
@@ -98,7 +104,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
             },
         )
 
-    await migration.async_adopt_legacy_entities(hass, entry, serial)
+    # A refused adoption waits for the user, and a retrying entry is easy to
+    # miss: the repairs panel is where Home Assistant asks for that. The
+    # issue carries the refusal's own translation key and placeholders.
+    blocked = _adoption_blocked(entry)
+    try:
+        await migration.async_adopt_legacy_entities(hass, entry, serial)
+    except ConfigEntryNotReady as err:
+        # Every refusal in migration.py is translated (test_translations pins
+        # it); the check only narrows the type.
+        if err.translation_key is not None:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                blocked,
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key=err.translation_key,
+                translation_placeholders=err.translation_placeholders,
+            )
+        raise
+    ir.async_delete_issue(hass, DOMAIN, blocked)
     # After adoption: an adopted entity id is one of those this must not touch,
     # and it is only in the registry once adoption has put it there.
     entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
@@ -148,3 +174,8 @@ async def _async_reload(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """Unload the platforms; the unit is released with the entry's unload hooks."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
+    """A deleted entry has nothing left to repair."""
+    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
