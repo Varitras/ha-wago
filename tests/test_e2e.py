@@ -301,3 +301,35 @@ async def test_a_failed_poll_keeps_the_address_out_of_the_log(hass, meter, caplo
     assert "poll failed" in caplog.text
     assert "Error fetching" in caplog.text
     _assert_address_kept_out(caplog, entry)
+
+
+# Fields on registers the manual shades grey; a direct-measuring meter holds 0
+# in all of them.
+GREY_FIELDS = ("voltage_avg", "current_avg", "ct_ratio_primary", "ct_ratio_secondary")
+
+
+def _unique_ids(hass, entry) -> set[str]:
+    return {
+        e.unique_id
+        for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    }
+
+
+async def test_a_register_the_meter_leaves_empty_gets_no_sensor(hass):
+    entry = await _setup(hass, _entry(hass))
+
+    created = _unique_ids(hass, entry)
+    assert f"{SERIAL}_voltage_l1" in created
+    assert not {f"{SERIAL}_{field}" for field in GREY_FIELDS} & created
+
+
+async def test_a_register_the_meter_fills_gets_its_sensor(hass, meter):
+    """Current average follows voltage average: with no load, 0 A is a real
+    reading, so its own register cannot tell an empty word from an idle line."""
+    meter.load_raw(holding({0x5000: 231.0, 0x500A: 0.0}))
+    meter.load_raw({"holding": {0x401F: 100, 0x4020: 5}})
+
+    entry = await _setup(hass, _entry(hass))
+
+    created = _unique_ids(hass, entry)
+    assert {f"{SERIAL}_{field}" for field in GREY_FIELDS} <= created

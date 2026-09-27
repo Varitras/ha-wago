@@ -31,6 +31,13 @@ interval; the identity group is read once, when the entry is set up.
 | Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
 | Identity: CT ratio, Modbus unit id, current quadrant | enabled, **diagnostic** | |
 
+Voltage average, current average and the CT ratio sit on registers the WAGO
+manual shades grey; a direct-measuring meter leaves them at zero. They are
+created only when the meter reports a non-zero voltage average or CT ratio at
+setup - current average follows voltage average, since 0 A is a real reading
+at no load. On a meter that leaves them empty they do not appear, and sensors
+created by an earlier version show as no longer provided and can be deleted.
+
 The serial number, meter code, protocol version and the firmware and hardware
 versions are not entities at any enablement level. Serial number, firmware and
 hardware version appear on the device card; meter code and protocol version are

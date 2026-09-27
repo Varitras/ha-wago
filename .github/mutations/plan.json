@@ -75,5 +75,12 @@
     "old": "        if _is_directed(field)\n",
     "new": "        if True\n",
     "tests": "a_netted_counter_may_fall"
+  },
+  {
+    "label": "sensor: a register the meter leaves empty must not become a sensor",
+    "path": "custom_components/wago_879/sensor.py",
+    "old": "        if not _is_populated(description, runtime):\n            continue\n",
+    "new": "",
+    "tests": "a_register_the_meter_leaves_empty_gets_no_sensor"
   }
 ]

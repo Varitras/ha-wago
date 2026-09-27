@@ -46,6 +46,10 @@ class WagoSensorDescription(SensorEntityDescription):
     """A sensor description that knows which block feeds it."""
 
     block: Block
+    # The field whose value, read at setup, decides whether this sensor exists
+    # at all: zero there means the meter leaves the register empty. Only for
+    # fields that cannot be zero on a meter that fills them.
+    populated_when_nonzero: str | None = None
 
 
 LEGACY_UNIQUE_IDS: dict[str, str] = {
@@ -107,6 +111,7 @@ def _measurement(field: str) -> WagoSensorDescription:
         key=field,
         translation_key=field,
         block=Block.MEASUREMENTS,
+        populated_when_nonzero=_POPULATED_WHEN_NONZERO.get(field),
         device_class=device_class,
         native_unit_of_measurement=unit,
         state_class=SensorStateClass.MEASUREMENT,
@@ -164,12 +169,26 @@ def _energy(field: str) -> WagoSensorDescription:
     )
 
 
+# The manual shades these rows grey without saying why, and a direct-measuring
+# meter holds 0 in them. A running meter is powered by the mains it measures,
+# so a filled voltage average is never 0; a current average of 0 A is a real
+# reading at no load, so it follows the voltage average, which carries the same
+# asterisk. No CT is ever rated 0 A, on either side.
+_POPULATED_WHEN_NONZERO = {
+    "voltage_avg": "voltage_avg",
+    "current_avg": "voltage_avg",
+    "ct_ratio_primary": "ct_ratio_primary",
+    "ct_ratio_secondary": "ct_ratio_primary",
+}
+
+
 def _identity(field: str) -> WagoSensorDescription:
     return WagoSensorDescription(
         key=field,
         translation_key=field,
         block=Block.IDENTITY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        populated_when_nonzero=_POPULATED_WHEN_NONZERO.get(field),
         entity_registry_enabled_default=field
         in {
             "ct_ratio_primary",
