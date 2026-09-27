@@ -9,7 +9,13 @@ Addresses live here and nowhere else.
 """
 
 from modbus_connection.model import Component
-from modbus_connection.model.fields import FloatField, NumberField, RawField
+from modbus_connection.model.fields import (
+    FloatField,
+    IPv4Field,
+    NumberField,
+    RawField,
+    StringField,
+)
 
 FLOAT_WORDS = 2
 
@@ -170,6 +176,64 @@ class Energy(Component):
     day_energy_l1 = _float(0x608B)
     day_energy_l2 = _float(0x608D)
     day_energy_l3 = _float(0x608F)
+
+
+# The 879-9000 answers as itself on this unit and forwards every other unit to
+# the meters behind it. Its registers are not in any manual: they are what the
+# vendor's configuration tool reads (captured, and checked against the tool's
+# screen), so only those addresses are declared.
+MODULE_UNIT_ID = 255
+IPV4_WORDS = 2
+HOSTNAME_WORDS = 16
+SERIAL_WORDS = 3
+
+
+class ModuleSettings(Component):
+    """The module's serial-side Modbus settings at 0x0000."""
+
+    register_space = "holding"
+
+    baud_rate_code = _number(0x0000)
+    parity_code = _number(0x0001)
+    port_code = _number(0x0002)
+    timeout = _number(0x0003)
+
+
+class ModuleNetwork(Component):
+    """The module's network settings at 0x0064, in the tool's field order."""
+
+    register_space = "holding"
+
+    ip_address = IPv4Field(0x0064, count=IPV4_WORDS)
+    netmask = IPv4Field(0x0066, count=IPV4_WORDS)
+    gateway = IPv4Field(0x0068, count=IPV4_WORDS)
+    dhcp = _number(0x006A)
+    dns_server_1 = IPv4Field(0x006B, count=IPV4_WORDS)
+    dns_server_2 = IPv4Field(0x006D, count=IPV4_WORDS)
+    ntp_server_1 = IPv4Field(0x006F, count=IPV4_WORDS)
+    ntp_server_2 = IPv4Field(0x0071, count=IPV4_WORDS)
+    hostname = StringField(0x0073, count=HOSTNAME_WORDS)
+    ntp = _number(0x0083)
+
+
+class ModuleVersion(Component):
+    """The module's version block at 0x0400 (13 words).
+
+    ponytail: firmware and bootloader were checked against one module only,
+    on which both read 1.0.856 - the two words holding 856 cannot be told
+    apart there, and which words carry each version's major and minor number
+    is an assignment the next module with differing versions has to confirm.
+    """
+
+    register_space = "holding"
+
+    firmware_major = _number(0x0403)
+    firmware_minor = _number(0x0404)
+    firmware_build = _number(0x0405)
+    bootloader_build = _number(0x0406)
+    serial_number = RawField(0x0408, count=SERIAL_WORDS)
+    bootloader_major = _number(0x040B)
+    bootloader_minor = _number(0x040C)
 
 
 def _field_names(component: type[Component]) -> tuple[str, ...]:
