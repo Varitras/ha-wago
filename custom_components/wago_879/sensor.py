@@ -40,10 +40,17 @@ def device_name(serial: str) -> str:
     return f"{MANUFACTURER} {identifier_tail(serial)}"
 
 
+# A float32 carries about seven significant decimal digits; printing more
+# shows the binary rounding of the register (1.34 -> 1.340000033378601).
+FLOAT32_SIGNIFICANT_DIGITS = 7
+
+
 def _version(identity: dict[str, Any], field: str) -> str | None:
     """A version the meter did not report stays unset; `str(None)` reads as "None"."""
     value = identity.get(field)
-    return None if value is None else str(value)
+    if value is None:
+        return None
+    return f"{value:.{FLOAT32_SIGNIFICANT_DIGITS}g}"
 
 
 def device_info(serial: str, identity: dict[str, Any]) -> DeviceInfo:

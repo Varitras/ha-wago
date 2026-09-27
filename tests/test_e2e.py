@@ -375,3 +375,15 @@ async def test_setup_refuses_a_device_that_is_no_wago_879(hass, meter):
 
     assert entry.state is ConfigEntryState.SETUP_ERROR
     assert "0x9999" in entry.reason
+
+
+async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, meter):
+    """The versions arrive as float32: 1.34 decodes to 1.340000033378601."""
+    meter.load_raw(holding({0x4007: 1.34, 0x4009: 1.23}))
+    entry = await _setup(hass, _entry(hass))
+
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, SERIAL), entry.entry_id
+    )
+    assert device.sw_version == "1.34"
+    assert device.hw_version == "1.23"
