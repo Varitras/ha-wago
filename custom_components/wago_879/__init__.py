@@ -48,6 +48,10 @@ def _setting(entry: WagoConfigEntry, key: str, default: int) -> int:
 
 async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """Read the identity, adopt the YAML entities, start both pollers."""
+    # An issue describes the attempt that raised it. Cleared before anything
+    # can fail, so a later attempt that stops earlier - the meter offline, say
+    # - does not leave it claiming an obstacle that may be gone.
+    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
     host = str(entry.data[CONF_HOST])
     # Core logs the title on every setup failure - "Error setting up entry
     # <title>" - and earlier versions titled the entry with the address. Done
@@ -107,7 +111,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     # A refused adoption waits for the user, and a retrying entry is easy to
     # miss: the repairs panel is where Home Assistant asks for that. The
     # issue carries the refusal's own translation key and placeholders.
-    blocked = _adoption_blocked(entry)
     try:
         await migration.async_adopt_legacy_entities(hass, entry, serial)
     except ConfigEntryNotReady as err:
@@ -117,14 +120,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
             ir.async_create_issue(
                 hass,
                 DOMAIN,
-                blocked,
+                _adoption_blocked(entry),
                 is_fixable=False,
                 severity=ir.IssueSeverity.ERROR,
                 translation_key=err.translation_key,
                 translation_placeholders=err.translation_placeholders,
             )
         raise
-    ir.async_delete_issue(hass, DOMAIN, blocked)
     # After adoption: an adopted entity id is one of those this must not touch,
     # and it is only in the registry once adoption has put it there.
     entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
