@@ -248,7 +248,7 @@ that has drifted end up equal either way.
 
 ## Running the gates
 
-Every gate this repository ships runs through one script:
+Every gate that can run locally runs through one script:
 
 ```sh
 PYTHON=/path/to/venv/bin/python .github/scripts/check.sh
@@ -271,8 +271,15 @@ Without `MIN_HA_PYTHON` that run is skipped, and the script's final line says
 so - a skipped gate that announces itself is honest, one that passes silently
 is not.
 
+Three more checks run **only on GitHub**, because they need its runners or
+actions: HACS validation (`validate.yml`), hassfest (`hassfest.yaml`) and
+CodeQL (`codeql.yml`). A green `check.sh` therefore says nothing about them.
+
+CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs,
+always against both Home Assistant versions, plus those three - on every push
+to a branch other than Dependabot's and on every pull request; HACS
+validation and hassfest also run nightly, CodeQL weekly.
+
 A fresh clone of this repository has **no pre-push hook** - the hook is a
-local, untracked convenience, not part of the repository. CI (see
-`.github/workflows/`) runs the same gates as `check.sh` on every push and
-pull request, and is the portable twin every clone gets regardless of local
-setup.
+local, untracked convenience, not part of the repository. CI is the portable
+twin every clone gets regardless of local setup.
