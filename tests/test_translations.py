@@ -71,45 +71,105 @@ TRANSLATED_EXCEPTIONS = {
     "ConfigEntryNotReady",
     "DeviceUnreachable",
     "HomeAssistantError",
+    "ServiceValidationError",
     "UpdateFailed",
 }
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
+def _called_name(call: ast.Call) -> str | None:
+    """`ConfigEntryNotReady(...)` and `exceptions.ConfigEntryNotReady(...)` alike."""
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return None
+
+
+def _calls_in(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _called_name(node) in TRANSLATED_EXCEPTIONS:
+            yield node
+
+
 def _constructions():
     """Every call of a translated exception class in the package."""
     for source in sorted(PACKAGE.rglob("*.py")):
-        tree = ast.parse(source.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in TRANSLATED_EXCEPTIONS
-            ):
-                yield source.name, node
+        for call in _calls_in(ast.parse(source.read_text(encoding="utf-8"))):
+            yield source.name, call
+
+
+def _untranslated(call: ast.Call, messages: dict) -> str | None:
+    """Why `call` would not render its translation, or None when it does.
+
+    Each check is a way the message silently went wrong once it was built:
+    without the domain core shows no text at all ("None" in the setup
+    message), a missing placeholder shows up literally as `{host}`, and a
+    placeholder dict held in a variable is a dict nobody here can read.
+    """
+    keywords = {k.arg: k.value for k in call.keywords}
+    key = keywords.get("translation_key")
+    if call.args or not isinstance(key, ast.Constant):
+        return "has no literal translation_key"
+    domain = keywords.get("translation_domain")
+    if not (isinstance(domain, ast.Name) and domain.id == "DOMAIN"):
+        return "does not pass translation_domain=DOMAIN"
+    if key.value not in messages:
+        return f"{key.value} not in strings.json"
+    wanted = set(PLACEHOLDER.findall(messages[key.value]["message"]))
+    given = keywords.get("translation_placeholders")
+    if given is None:
+        passed = set()
+    elif isinstance(given, ast.Dict):
+        passed = {k.value for k in given.keys if isinstance(k, ast.Constant)}
+    else:
+        return f"{key.value}: placeholders are not a literal dict"
+    if passed != wanted:
+        return f"{key.value}: {passed} != {wanted}"
+    return None
 
 
 def test_every_raised_message_is_translated():
     messages = _load(PACKAGE / "strings.json").get("exceptions", {})
-    offenders = []
-    for name, call in _constructions():
-        keywords = {k.arg: k.value for k in call.keywords}
-        key = keywords.get("translation_key")
-        if call.args or not isinstance(key, ast.Constant):
-            offenders.append(f"{name}:{call.lineno} has no literal translation_key")
-            continue
-        if key.value not in messages:
-            offenders.append(f"{name}:{call.lineno} {key.value} not in strings.json")
-            continue
-        wanted = set(PLACEHOLDER.findall(messages[key.value]["message"]))
-        given = keywords.get("translation_placeholders")
-        if isinstance(given, ast.Dict):
-            passed = {k.value for k in given.keys if isinstance(k, ast.Constant)}
-            if passed != wanted:
-                offenders.append(
-                    f"{name}:{call.lineno} {key.value}: {passed} != {wanted}"
-                )
+    offenders = [
+        f"{name}:{call.lineno} {reason}"
+        for name, call in _constructions()
+        if (reason := _untranslated(call, messages)) is not None
+    ]
     assert not offenders
+
+
+def test_the_translation_scan_catches_the_shapes_it_was_written_for():
+    messages = {
+        "meter_not_answering": {"message": "The meter at {host} did not answer"}
+    }
+
+    def reason(source: str) -> str | None:
+        return _untranslated(next(_calls_in(ast.parse(source))), messages)
+
+    assert reason('raise ConfigEntryNotReady("text")') is not None
+    assert reason('raise exceptions.ConfigEntryNotReady("text")') is not None
+    assert reason('raise ServiceValidationError("text")') is not None
+    assert "translation_domain" in reason(
+        'raise ConfigEntryNotReady(translation_key="meter_not_answering",'
+        ' translation_placeholders={"host": host})'
+    )
+    assert "!=" in reason(
+        "raise ConfigEntryNotReady(translation_domain=DOMAIN,"
+        ' translation_key="meter_not_answering")'
+    )
+    assert "literal dict" in reason(
+        "raise ConfigEntryNotReady(translation_domain=DOMAIN,"
+        ' translation_key="meter_not_answering", translation_placeholders=values)'
+    )
+    assert (
+        reason(
+            "raise ConfigEntryNotReady(translation_domain=DOMAIN,"
+            ' translation_key="meter_not_answering",'
+            ' translation_placeholders={"host": host})'
+        )
+        is None
+    )
 
 
 def test_every_sensor_without_a_device_class_has_an_icon():
