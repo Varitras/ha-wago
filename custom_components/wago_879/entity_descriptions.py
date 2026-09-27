@@ -182,12 +182,22 @@ _POPULATED_WHEN_NONZERO = {
 }
 
 
+# The one identity word with a physical unit: the manual gives "Meter amp" in
+# amperes. The CT ratio words stay unitless while their encoding is unknown.
+_IDENTITY_KINDS: dict[str, tuple[SensorDeviceClass, str]] = {
+    "meter_amperes": (SensorDeviceClass.CURRENT, UnitOfElectricCurrent.AMPERE),
+}
+
+
 def _identity(field: str) -> WagoSensorDescription:
+    device_class, unit = _IDENTITY_KINDS.get(field, (None, None))
     return WagoSensorDescription(
         key=field,
         translation_key=field,
         block=Block.IDENTITY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=device_class,
+        native_unit_of_measurement=unit,
         populated_when_nonzero=_POPULATED_WHEN_NONZERO.get(field),
         entity_registry_enabled_default=field
         in {

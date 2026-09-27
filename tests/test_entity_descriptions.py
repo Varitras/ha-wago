@@ -236,3 +236,10 @@ def test_the_platform_leaves_updates_to_the_coordinators():
     """The quality scale's parallel-updates rule: sensors fed by a coordinator
     never update on their own, so the platform limits nothing."""
     assert sensor.PARALLEL_UPDATES == 0
+
+
+def test_the_rated_current_is_a_current():
+    """The manual gives "Meter amp" in amperes."""
+    rated = next(d for d in SENSOR_DESCRIPTIONS if d.key == "meter_amperes")
+    assert rated.device_class is SensorDeviceClass.CURRENT
+    assert rated.native_unit_of_measurement == "A"

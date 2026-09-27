@@ -110,3 +110,18 @@ def test_every_raised_message_is_translated():
                     f"{name}:{call.lineno} {key.value}: {passed} != {wanted}"
                 )
     assert not offenders
+
+
+def test_every_sensor_without_a_device_class_has_an_icon():
+    """The quality scale's icon-translations rule: a device class brings its
+    own icon, everything else needs one in icons.json - and icons.json may not
+    name a key no sensor uses."""
+    icons = _load(PACKAGE / "icons.json")["entity"]["sensor"]
+    keys = {d.translation_key for d in SENSOR_DESCRIPTIONS}
+    unnamed = [
+        d.translation_key
+        for d in SENSOR_DESCRIPTIONS
+        if d.device_class is None and d.translation_key not in icons
+    ]
+    assert not unnamed
+    assert set(icons) <= keys

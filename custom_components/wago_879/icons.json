@@ -1,0 +1,33 @@
+{
+  "entity": {
+    "sensor": {
+      "tariff": {
+        "default": "mdi:cash-clock"
+      },
+      "modbus_id": {
+        "default": "mdi:identifier"
+      },
+      "power_down_counter": {
+        "default": "mdi:power-plug-off"
+      },
+      "current_quadrant": {
+        "default": "mdi:chart-pie-outline"
+      },
+      "quadrant_l1": {
+        "default": "mdi:chart-pie-outline"
+      },
+      "quadrant_l2": {
+        "default": "mdi:chart-pie-outline"
+      },
+      "quadrant_l3": {
+        "default": "mdi:chart-pie-outline"
+      },
+      "ct_ratio_primary": {
+        "default": "mdi:current-ac"
+      },
+      "ct_ratio_secondary": {
+        "default": "mdi:current-ac"
+      }
+    }
+  }
+}
