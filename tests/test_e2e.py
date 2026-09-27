@@ -30,6 +30,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
+from .test_module import module_holding
+
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
 SERIAL = "00123456"
@@ -387,3 +389,63 @@ async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, 
     )
     assert device.sw_version == "1.34"
     assert device.hw_version == "1.23"
+
+
+MODULE_SERIAL = "033000000001"
+MODULE_NAME = "WAGO Modbus TCP 0001"
+
+
+async def test_the_module_is_its_own_device_with_every_setting(hass, meter):
+    """What the vendor's configuration tool shows, as diagnostics of the
+    module the meter is reached through."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+
+    devices = dr.async_get(hass)
+    module = devices.async_get_device_by_identifier(
+        (DOMAIN, MODULE_SERIAL), entry.entry_id
+    )
+    assert module.name == MODULE_NAME
+    assert module.model == "879-9000"
+    assert module.serial_number == MODULE_SERIAL
+    assert module.sw_version == "1.0.856"
+    meter_device = devices.async_get_device_by_identifier(
+        (DOMAIN, SERIAL), entry.entry_id
+    )
+    assert meter_device.via_device_id == module.id
+
+    registry = er.async_get(hass)
+
+    def state(platform: str, key: str) -> str:
+        entity_id = registry.async_get_entity_id(
+            platform, DOMAIN, f"{MODULE_SERIAL}_{key}"
+        )
+        return hass.states.get(entity_id).state
+
+    assert state("sensor", "hostname") == "Wago-TCP"
+    assert state("sensor", "ip_address") == "192.0.2.4"
+    assert state("sensor", "netmask") == "255.255.255.0"
+    assert state("sensor", "gateway") == "192.0.2.1"
+    assert state("sensor", "dns_server_2") == "192.0.2.1"
+    assert state("sensor", "ntp_server_2") == "0.0.0.0"
+    assert state("sensor", "serial_number") == MODULE_SERIAL
+    assert state("sensor", "bootloader_version") == "1.0.856"
+    assert state("sensor", "modbus_port") == "rs232"
+    assert state("sensor", "baud_rate") == "115200"
+    assert state("sensor", "parity") == "even"
+    assert state("sensor", "timeout") == "3000"
+    assert state("binary_sensor", "dhcp") == "off"
+    assert state("binary_sensor", "ntp") == "on"
+
+
+async def test_a_meter_without_the_module_still_loads(hass):
+    """A gateway other than the 879-9000 has no module registers."""
+    entry = await _setup(hass, _entry(hass))
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert (
+        dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, MODULE_SERIAL), entry.entry_id
+        )
+        is None
+    )

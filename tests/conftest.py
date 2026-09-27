@@ -10,6 +10,8 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 from modbus_connection import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
 
+from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
+
 pytest_plugins = ("pytest_homeassistant_custom_component",)
 
 # Where Home Assistant's modbus integration builds the connection it shares;
@@ -46,6 +48,7 @@ class SharedMockModbus:
         self.params_seen: list = []
         self.connections: list[MockModbusConnection] = []
         self._raw: dict = {"holding": {}}
+        self._module_raw: dict = {"holding": {}}
         self._request_failure: Exception | None = None
         self._read_failures: list = []
 
@@ -57,6 +60,7 @@ class SharedMockModbus:
         unit.fail_requests(self._request_failure)
         for address, error in self._read_failures:
             unit.fail_read(address, error, register_type="holding")
+        connection.for_unit(MODULE_UNIT_ID).load_raw(self._module_raw)
         self.connections.append(connection)
         return connection
 
@@ -74,6 +78,13 @@ class SharedMockModbus:
             self._raw[space].update(values)
         for connection in self.connections:
             connection.for_unit(1).load_raw(raw)
+
+    def load_module_raw(self, raw: dict) -> None:
+        """Registers of the 879-9000 module itself, on its own unit."""
+        for space, values in raw.items():
+            self._module_raw[space].update(values)
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).load_raw(raw)
 
     def fail_read_band(self, address: int) -> None:
         """The meter refuses the holding block starting at ``address``."""

@@ -16,7 +16,19 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_HOST
 from .coordinator import WagoConfigEntry, WagoCoordinator
 
-TO_REDACT = {CONF_HOST, "serial_number", "unique_id"}
+# The module's settings name the network it sits in; its serial identifies it.
+TO_REDACT = {
+    CONF_HOST,
+    "serial_number",
+    "unique_id",
+    "ip_address",
+    "gateway",
+    "dns_server_1",
+    "dns_server_2",
+    "ntp_server_1",
+    "ntp_server_2",
+    "hostname",
+}
 
 
 def _poller(coordinator: WagoCoordinator) -> dict[str, Any]:
@@ -47,4 +59,5 @@ async def async_get_config_entry_diagnostics(
         diagnostics["identity"] = runtime.identity
         diagnostics["measurements"] = _poller(runtime.measurements)
         diagnostics["energy"] = _poller(runtime.energy)
+        diagnostics["module"] = runtime.module
     return async_redact_data(diagnostics, TO_REDACT)

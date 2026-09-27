@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
+from typing import Any
 
 from modbus_connection import ModbusError, ModbusTcpParams
 
@@ -14,7 +16,7 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
 )
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 
 from . import entity_id_rename, migration
 from .const import (
@@ -33,10 +35,12 @@ from .const import (
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
-from .sensor import entry_title
-from .wago_879_api.device import UnsupportedMeter, WagoMeter
+from .sensor import entry_title, module_device_info
+from .wago_879_api.device import UnsupportedMeter, WagoMeter, WagoModule
+from .wago_879_api.registers import MODULE_UNIT_ID
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
 
 
 def _adoption_blocked(entry: WagoConfigEntry) -> str:
@@ -165,15 +169,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     await measurements.async_config_entry_first_refresh()
     await energy.async_config_entry_first_refresh()
 
+    module = await _async_read_module(hass, entry, params)
     entry.runtime_data = WagoRuntimeData(
         serial=serial,
         identity=identity,
         measurements=measurements,
         energy=energy,
+        module=module,
+        module_device_id=_register_module(hass, entry, module),
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_read_module(
+    hass: HomeAssistant, entry: WagoConfigEntry, params: ModbusTcpParams
+) -> dict[str, Any] | None:
+    """The 879-9000's own settings, or None: the meter works without them."""
+    try:
+        return await WagoModule(
+            async_get_unit(hass, entry, params, MODULE_UNIT_ID)
+        ).async_read()
+    except ModbusError as err:
+        _LOGGER.debug(
+            "No 879-9000 settings on unit %s: %s",
+            MODULE_UNIT_ID,
+            redact(str(err), params.host),
+        )
+        return None
+
+
+def _register_module(
+    hass: HomeAssistant, entry: WagoConfigEntry, module: dict[str, Any] | None
+) -> str | None:
+    """Register the module's device ahead of the platforms.
+
+    The meter links to it by registry id, which only exists once the device
+    does.
+    """
+    if module is None:
+        return None
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, **module_device_info(module)
+    )
+    return device.id
 
 
 async def _async_reload(hass: HomeAssistant, entry: WagoConfigEntry) -> None:

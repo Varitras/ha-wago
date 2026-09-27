@@ -43,18 +43,21 @@ def _words(start: int, values: list[int]) -> dict[int, int]:
     return {start + offset: value for offset, value in enumerate(values)}
 
 
+def module_holding() -> dict[str, dict[int, int]]:
+    """The module's three register tables, as a mock unit loads them."""
+    return {
+        "holding": {
+            **_words(0x0000, SETTINGS),
+            **_words(0x0064, NETWORK),
+            **_words(0x0400, VERSION),
+        }
+    }
+
+
 @pytest.fixture
 def unit():
     module = MockModbusConnection().for_unit(MODULE_UNIT_ID)
-    module.load_raw(
-        {
-            "holding": {
-                **_words(0x0000, SETTINGS),
-                **_words(0x0064, NETWORK),
-                **_words(0x0400, VERSION),
-            }
-        }
-    )
+    module.load_raw(module_holding())
     return module
 
 
@@ -100,3 +103,11 @@ async def test_a_module_that_does_not_answer_raises(unit):
 
     with pytest.raises(ModbusConnectionError):
         await WagoModule(unit).async_read()
+
+
+async def test_another_gateway_on_unit_255_is_not_taken_for_the_module(unit):
+    """Unit 255 of another gateway may answer too; the 879-9000 reports
+    device type 330, its maker's article number, in its version block."""
+    unit.load_raw({"holding": {0x0400: 0}})
+
+    assert await WagoModule(unit).async_read() is None

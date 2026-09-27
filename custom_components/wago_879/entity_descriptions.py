@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntityDescription,
@@ -28,8 +29,10 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfReactiveEnergy,
     UnitOfReactivePower,
+    UnitOfTime,
 )
 
+from .wago_879_api.device import PARITIES, PORTS
 from .wago_879_api.registers import ENERGY_FIELDS, IDENTITY_FIELDS, MEASUREMENT_FIELDS
 
 
@@ -39,6 +42,7 @@ class Block(StrEnum):
     MEASUREMENTS = "measurements"
     ENERGY = "energy"
     IDENTITY = "identity"
+    MODULE = "module"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -213,4 +217,67 @@ SENSOR_DESCRIPTIONS: tuple[WagoSensorDescription, ...] = (
     *(_measurement(f) for f in MEASUREMENT_FIELDS),
     *(_energy(f) for f in ENERGY_FIELDS),
     *(_identity(f) for f in IDENTITY_FIELDS if f not in OMITTED_FIELDS),
+)
+
+
+# The 879-9000 module the meter is reached through: what its configuration
+# tool shows, as diagnostics of its own device. Read once at setup.
+_MODULE_TEXT_FIELDS = (
+    "serial_number",
+    "firmware_version",
+    "bootloader_version",
+    "ip_address",
+    "netmask",
+    "gateway",
+    "dns_server_1",
+    "dns_server_2",
+    "ntp_server_1",
+    "ntp_server_2",
+    "hostname",
+    "baud_rate",
+)
+
+
+def _module(
+    field: str,
+    *,
+    device_class: SensorDeviceClass | None = None,
+    options: list[str] | None = None,
+    native_unit_of_measurement: str | None = None,
+) -> WagoSensorDescription:
+    return WagoSensorDescription(
+        key=field,
+        translation_key=field,
+        block=Block.MODULE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=device_class,
+        options=options,
+        native_unit_of_measurement=native_unit_of_measurement,
+    )
+
+
+MODULE_SENSOR_DESCRIPTIONS: tuple[WagoSensorDescription, ...] = (
+    *(_module(field) for field in _MODULE_TEXT_FIELDS),
+    _module(
+        "modbus_port",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(PORTS.values()),
+    ),
+    _module(
+        "parity",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(PARITIES.values()),
+    ),
+    _module(
+        "timeout",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MILLISECONDS,
+    ),
+)
+
+MODULE_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = tuple(
+    BinarySensorEntityDescription(
+        key=field, translation_key=field, entity_category=EntityCategory.DIAGNOSTIC
+    )
+    for field in ("dhcp", "ntp")
 )

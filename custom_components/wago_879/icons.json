@@ -27,6 +27,50 @@
       },
       "ct_ratio_secondary": {
         "default": "mdi:current-ac"
+      },
+      "serial_number": {
+        "default": "mdi:tag-text-outline"
+      },
+      "firmware_version": {
+        "default": "mdi:chip"
+      },
+      "bootloader_version": {
+        "default": "mdi:memory"
+      },
+      "ip_address": {
+        "default": "mdi:ip-network"
+      },
+      "netmask": {
+        "default": "mdi:ip-outline"
+      },
+      "gateway": {
+        "default": "mdi:router-network"
+      },
+      "dns_server_1": {
+        "default": "mdi:dns"
+      },
+      "dns_server_2": {
+        "default": "mdi:dns"
+      },
+      "ntp_server_1": {
+        "default": "mdi:clock-check-outline"
+      },
+      "ntp_server_2": {
+        "default": "mdi:clock-check-outline"
+      },
+      "hostname": {
+        "default": "mdi:lan-connect"
+      },
+      "baud_rate": {
+        "default": "mdi:speedometer"
+      }
+    },
+    "binary_sensor": {
+      "dhcp": {
+        "default": "mdi:ip-network"
+      },
+      "ntp": {
+        "default": "mdi:clock-check-outline"
       }
     }
   }

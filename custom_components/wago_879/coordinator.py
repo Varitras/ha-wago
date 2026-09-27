@@ -118,6 +118,10 @@ class WagoRuntimeData:
     identity: dict[str, Any]
     measurements: WagoCoordinator
     energy: WagoCoordinator
+    # The 879-9000's own settings and its registered device; None behind any
+    # other gateway.
+    module: dict[str, Any] | None = None
+    module_device_id: str | None = None
 
     def coordinator_for(self, block: Block) -> WagoCoordinator | None:
         """The poller feeding a block; identity is read once and has none."""
@@ -126,7 +130,7 @@ class WagoRuntimeData:
                 return self.measurements
             case Block.ENERGY:
                 return self.energy
-            case Block.IDENTITY:
+            case Block.IDENTITY | Block.MODULE:
                 return None
             case _:
                 assert_never(block)

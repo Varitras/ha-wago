@@ -393,6 +393,67 @@
       },
       "ct_ratio_secondary": {
         "name": "CT ratio secondary"
+      },
+      "serial_number": {
+        "name": "Serial number"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
+      "bootloader_version": {
+        "name": "Bootloader version"
+      },
+      "ip_address": {
+        "name": "IP address"
+      },
+      "netmask": {
+        "name": "Netmask"
+      },
+      "gateway": {
+        "name": "Default gateway"
+      },
+      "dns_server_1": {
+        "name": "DNS server 1"
+      },
+      "dns_server_2": {
+        "name": "DNS server 2"
+      },
+      "ntp_server_1": {
+        "name": "NTP server 1"
+      },
+      "ntp_server_2": {
+        "name": "NTP server 2"
+      },
+      "hostname": {
+        "name": "Host name"
+      },
+      "baud_rate": {
+        "name": "Baud rate"
+      },
+      "timeout": {
+        "name": "Modbus timeout"
+      },
+      "modbus_port": {
+        "name": "Modbus port",
+        "state": {
+          "rs232": "RS-232"
+        }
+      },
+      "parity": {
+        "name": "Parity",
+        "state": {
+          "even": "Even",
+          "none": "None",
+          "odd": "Odd"
+        }
+      }
+    },
+    "binary_sensor": {
+      "dhcp": {
+        "name": "DHCP"
+      },
+      "ntp": {
+        "name": "NTP support"
       }
     }
   },

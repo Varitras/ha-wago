@@ -12,6 +12,7 @@ from .registers import (
     ENERGY_FIELDS,
     IDENTITY_FIELDS,
     MEASUREMENT_FIELDS,
+    MODULE_DEVICE_TYPE,
     SERIAL_WORDS,
     Energy,
     Identity,
@@ -124,11 +125,16 @@ class WagoModule:
         self._network = ModuleNetwork(unit)
         self._version = ModuleVersion(unit)
 
-    async def async_read(self) -> dict[str, Any]:
-        """Everything the configuration tool shows; raises ModbusError."""
+    async def async_read(self) -> dict[str, Any] | None:
+        """Everything the configuration tool shows, None for another gateway.
+
+        Raises ModbusError when unit 255 does not answer at all.
+        """
+        await self._version.async_update()
+        if self._version.device_type != MODULE_DEVICE_TYPE:
+            return None
         await self._settings.async_update()
         await self._network.async_update()
-        await self._version.async_update()
         settings, network, version = self._settings, self._network, self._version
         return {
             "serial_number": (

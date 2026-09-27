@@ -86,8 +86,8 @@
   {
     "label": "diagnostics: the address must be redacted",
     "path": "custom_components/wago_879/diagnostics.py",
-    "old": "TO_REDACT = {CONF_HOST, \"serial_number\", \"unique_id\"}\n",
-    "new": "TO_REDACT = {\"serial_number\", \"unique_id\"}\n",
+    "old": "TO_REDACT = {\n    CONF_HOST,\n    \"serial_number\",\n",
+    "new": "TO_REDACT = {\n    \"serial_number\",\n",
     "tests": "diagnostics_carry_the_readings_without_address_or_serial"
   },
   {
@@ -96,5 +96,12 @@
     "old": "    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))\n    host = str(entry.data[CONF_HOST])\n",
     "new": "    host = str(entry.data[CONF_HOST])\n",
     "tests": "a_blocked_adoption_is_a_repair_until_it_goes_through or does_not_outlive"
+  },
+  {
+    "label": "module: the meter must be linked to the module it is reached through",
+    "path": "custom_components/wago_879/sensor.py",
+    "old": "        info[\"via_device_id\"] = runtime.module_device_id\n",
+    "new": "        pass\n",
+    "tests": "the_module_is_its_own_device_with_every_setting"
   }
 ]

@@ -393,6 +393,67 @@
       },
       "ct_ratio_secondary": {
         "name": "Wandlerverhältnis sekundär"
+      },
+      "serial_number": {
+        "name": "Seriennummer"
+      },
+      "firmware_version": {
+        "name": "Firmware-Version"
+      },
+      "bootloader_version": {
+        "name": "Bootloader-Version"
+      },
+      "ip_address": {
+        "name": "IP-Adresse"
+      },
+      "netmask": {
+        "name": "Netzmaske"
+      },
+      "gateway": {
+        "name": "Standard-Gateway"
+      },
+      "dns_server_1": {
+        "name": "DNS-Server 1"
+      },
+      "dns_server_2": {
+        "name": "DNS-Server 2"
+      },
+      "ntp_server_1": {
+        "name": "NTP-Server 1"
+      },
+      "ntp_server_2": {
+        "name": "NTP-Server 2"
+      },
+      "hostname": {
+        "name": "Hostname"
+      },
+      "baud_rate": {
+        "name": "Baudrate"
+      },
+      "timeout": {
+        "name": "Modbus-Timeout"
+      },
+      "modbus_port": {
+        "name": "Modbus-Port",
+        "state": {
+          "rs232": "RS-232"
+        }
+      },
+      "parity": {
+        "name": "Parität",
+        "state": {
+          "even": "Gerade",
+          "none": "Keine",
+          "odd": "Ungerade"
+        }
+      }
+    },
+    "binary_sensor": {
+      "dhcp": {
+        "name": "DHCP"
+      },
+      "ntp": {
+        "name": "NTP-Unterstützung"
       }
     }
   },

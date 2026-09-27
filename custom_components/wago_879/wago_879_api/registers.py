@@ -186,6 +186,8 @@ MODULE_UNIT_ID = 255
 IPV4_WORDS = 2
 HOSTNAME_WORDS = 16
 SERIAL_WORDS = 3
+# What the module reports as its device type: inepro's article number 0330.
+MODULE_DEVICE_TYPE = 330
 
 
 class ModuleSettings(Component):
@@ -227,6 +229,7 @@ class ModuleVersion(Component):
 
     register_space = "holding"
 
+    device_type = _number(0x0400)
     firmware_major = _number(0x0403)
     firmware_minor = _number(0x0404)
     firmware_build = _number(0x0405)
