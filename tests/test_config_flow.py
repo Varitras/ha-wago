@@ -40,7 +40,7 @@ def _enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture(autouse=True)
 def meter(mock_modbus):
-    mock_modbus.load_raw({"holding": {0x4000: 0x0012, 0x4001: 0x3456}})
+    mock_modbus.load_raw({"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: 0x1111}})
     return mock_modbus
 
 
@@ -224,7 +224,7 @@ async def test_reconfigure_against_a_different_meter_does_not_rebind_the_entry(
     """
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
     entry.add_to_hass(hass)
-    mock_modbus.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765}})
+    mock_modbus.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765, 0x4002: 0x1111}})
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
@@ -318,3 +318,13 @@ async def test_the_options_refuse_a_number_that_is_not_whole(hass):
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "not_a_whole_number"}
     assert entry.options == {}
+
+
+async def test_a_device_that_is_no_wago_879_is_refused(hass, meter):
+    meter.load_raw({"holding": {0x4002: 0x9999}})
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unsupported_meter"}

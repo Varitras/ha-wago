@@ -36,7 +36,7 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .sensor import device_name
-from .wago_879_api.device import WagoMeter
+from .wago_879_api.device import UnsupportedMeter, WagoMeter
 
 PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
@@ -143,6 +143,8 @@ async def probe_serial(
             await meter.async_read_identity()
     except _PROBE_FAILURES:
         return None, "cannot_connect"
+    except UnsupportedMeter:
+        return None, "unsupported_meter"
     except HomeAssistantError:
         # The only HomeAssistantError the helper raises: another consumer holds
         # this endpoint with link settings that cannot both be honoured. The

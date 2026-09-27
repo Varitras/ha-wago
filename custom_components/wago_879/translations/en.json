@@ -36,7 +36,8 @@
       "cannot_connect": "The meter did not answer",
       "link_settings_clash": "Another integration already uses this address with different link settings",
       "invalid_host": "Enter a host name or IP address",
-      "not_a_whole_number": "Enter a whole number"
+      "not_a_whole_number": "Enter a whole number",
+      "unsupported_meter": "The device at this address is not a supported WAGO 879 meter"
     },
     "abort": {
       "already_configured": "This meter is already configured",
@@ -422,6 +423,9 @@
     },
     "read_failed": {
       "message": "{poller}: Modbus read failed: {error}"
+    },
+    "unsupported_meter": {
+      "message": "The device answers with meter code {meter_code}, which is not a WAGO 879-3000 variant this integration supports (4PU, 4PS, 2PU CT)."
     }
   },
   "issues": {

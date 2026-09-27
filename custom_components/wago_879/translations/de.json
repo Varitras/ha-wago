@@ -36,7 +36,8 @@
       "cannot_connect": "Der Zähler antwortet nicht",
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
       "invalid_host": "Hostname oder IP-Adresse eingeben",
-      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben",
+      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler"
     },
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
@@ -422,6 +423,9 @@
     },
     "read_failed": {
       "message": "{poller}: Modbus-Lesezugriff fehlgeschlagen: {error}"
+    },
+    "unsupported_meter": {
+      "message": "Das Gerät meldet den Meter-Code {meter_code}; das ist keine von dieser Integration unterstützte WAGO-879-3000-Variante (4PU, 4PS, 2PU CT)."
     }
   },
   "issues": {

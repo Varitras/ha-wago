@@ -34,7 +34,7 @@ from .const import (
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
 from .sensor import device_name
-from .wago_879_api.device import WagoMeter
+from .wago_879_api.device import UnsupportedMeter, WagoMeter
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -90,6 +90,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
                 "host": mask(host),
                 "error": redact(str(err), host),
             },
+        ) from None
+    except UnsupportedMeter as err:
+        # Not ConfigEntryNotReady: no retry turns another device into this meter.
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="unsupported_meter",
+            translation_placeholders={"meter_code": f"0x{err.meter_code:04X}"},
         ) from None
     serial = meter.serial_number
     assert serial is not None
