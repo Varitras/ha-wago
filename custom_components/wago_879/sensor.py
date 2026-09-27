@@ -40,6 +40,18 @@ def device_name(serial: str) -> str:
     return f"{MANUFACTURER} {identifier_tail(serial)}"
 
 
+def entry_title(current: str, host: str, serial: str) -> str:
+    """The title an entry should carry: the device name instead of an address.
+
+    Earlier versions titled the entry with the meter's address, and core logs
+    the title on every setup failure. Only a title that is exactly the
+    address is replaced - a title the user chose stays.
+    """
+    if current == host:
+        return device_name(serial)
+    return current
+
+
 # A float32 carries about seven significant decimal digits; printing more
 # shows the binary rounding of the register (1.34 -> 1.340000033378601).
 FLOAT32_SIGNIFICANT_DIGITS = 7

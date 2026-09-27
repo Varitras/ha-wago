@@ -16,7 +16,7 @@ from custom_components.wago_879.const import (
     DOMAIN,
 )
 from homeassistant.components.modbus import async_get_unit
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.selector import NumberSelector, TextSelector
 
@@ -328,3 +328,22 @@ async def test_a_device_that_is_no_wago_879_is_refused(hass, meter):
     )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "unsupported_meter"}
+
+
+async def test_reconfigure_retitles_an_entry_still_named_after_its_old_address(hass):
+    """Setup retitles an address title only while it equals the saved host. A
+    disabled entry reconfigured before its first setup under this version
+    would lose that equality and keep the old address as its title."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=HOST,
+        data=USER_INPUT,
+        unique_id=SERIAL,
+        disabled_by=ConfigEntryDisabler.USER,
+    )
+    entry.add_to_hass(hass)
+
+    result = await _reconfigure(hass, entry)
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == "WAGO 3456"
