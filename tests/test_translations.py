@@ -107,7 +107,7 @@ def _untranslated(call: ast.Call, messages: dict) -> str | None:
     message), a missing placeholder shows up literally as `{host}`, and a
     placeholder dict held in a variable is a dict nobody here can read.
     """
-    keywords = {k.arg: k.value for k in call.keywords}
+    keywords = {keyword.arg: keyword.value for keyword in call.keywords}
     key = keywords.get("translation_key")
     if call.args or not isinstance(key, ast.Constant):
         return "has no literal translation_key"
@@ -121,7 +121,7 @@ def _untranslated(call: ast.Call, messages: dict) -> str | None:
     if given is None:
         passed = set()
     elif isinstance(given, ast.Dict):
-        passed = {k.value for k in given.keys if isinstance(k, ast.Constant)}
+        passed = {name.value for name in given.keys if isinstance(name, ast.Constant)}
     else:
         return f"{key.value}: placeholders are not a literal dict"
     if passed != wanted:
@@ -177,11 +177,11 @@ def test_every_sensor_without_a_device_class_has_an_icon():
     own icon, everything else needs one in icons.json - and icons.json may not
     name a key no sensor uses."""
     icons = _load(PACKAGE / "icons.json")["entity"]["sensor"]
-    keys = {d.translation_key for d in SENSOR_DESCRIPTIONS}
+    keys = {description.translation_key for description in SENSOR_DESCRIPTIONS}
     unnamed = [
-        d.translation_key
-        for d in SENSOR_DESCRIPTIONS
-        if d.device_class is None and d.translation_key not in icons
+        description.translation_key
+        for description in SENSOR_DESCRIPTIONS
+        if description.device_class is None and description.translation_key not in icons
     ]
     assert not unnamed
     assert set(icons) <= keys
@@ -197,7 +197,11 @@ def test_every_refused_adoption_has_a_repair_text():
     for name, call in _constructions():
         if name != "migration.py":
             continue
-        key = next(k.value.value for k in call.keywords if k.arg == "translation_key")
+        key = next(
+            keyword.value.value
+            for keyword in call.keywords
+            if keyword.arg == "translation_key"
+        )
         wanted = set(PLACEHOLDER.findall(strings["exceptions"][key]["message"]))
         if key not in issues:
             offenders.append(f"{key}: no repair text")

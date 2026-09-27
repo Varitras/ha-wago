@@ -310,8 +310,10 @@ GREY_FIELDS = ("voltage_avg", "current_avg", "ct_ratio_primary", "ct_ratio_secon
 
 def _unique_ids(hass, entry) -> set[str]:
     return {
-        e.unique_id
-        for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        registry_entry.unique_id
+        for registry_entry in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
     }
 
 

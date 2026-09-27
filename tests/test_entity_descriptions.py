@@ -207,7 +207,9 @@ GREY_ADDRESSES = {
 
 def _words(field: str) -> set[int]:
     component = next(
-        c for c in (Identity, Measurements, Energy) if field in c.declared_fields
+        candidate
+        for candidate in (Identity, Measurements, Energy)
+        if field in candidate.declared_fields
     )
     first = address_of(component, field)
     return set(range(first, first + component.declared_fields[field].count))
@@ -217,9 +219,10 @@ def test_a_sensor_on_a_grey_register_is_created_only_when_the_meter_fills_it():
     """ "Voltage average 0.0 V" sat next to three phases at 240 V: the meter
     left the register empty and the sensor reported the empty word as a value."""
     ungated = [
-        d.key
-        for d in SENSOR_DESCRIPTIONS
-        if _words(d.key) & GREY_ADDRESSES and d.populated_when_nonzero is None
+        description.key
+        for description in SENSOR_DESCRIPTIONS
+        if _words(description.key) & GREY_ADDRESSES
+        and description.populated_when_nonzero is None
     ]
     assert not ungated
 
@@ -240,6 +243,10 @@ def test_the_platform_leaves_updates_to_the_coordinators():
 
 def test_the_rated_current_is_a_current():
     """The manual gives "Meter amp" in amperes."""
-    rated = next(d for d in SENSOR_DESCRIPTIONS if d.key == "meter_amperes")
+    rated = next(
+        description
+        for description in SENSOR_DESCRIPTIONS
+        if description.key == "meter_amperes"
+    )
     assert rated.device_class is SensorDeviceClass.CURRENT
     assert rated.native_unit_of_measurement == "A"
