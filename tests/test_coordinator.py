@@ -154,10 +154,16 @@ async def test_a_slow_read_is_tolerated_like_any_other_failed_poll(
 async def test_a_slow_read_before_any_value_raises_with_timeout_wording(
     hanging_coordinator,
 ):
+    """``str(TimeoutError())`` is empty; the failure names the timeout instead."""
     poller, reader = hanging_coordinator
     reader.hang = True
-    with pytest.raises(UpdateFailed, match="timed out after 0.01s"):
+    with pytest.raises(UpdateFailed) as caught:
         await poller._async_update_data()
+    assert caught.value.translation_key == "read_timed_out"
+    assert caught.value.translation_placeholders == {
+        "poller": "test",
+        "seconds": "0.01",
+    }
 
 
 def test_coordinator_for_maps_each_block_to_its_own_poller():

@@ -75,5 +75,26 @@
     "old": "        if _is_directed(field)\n",
     "new": "        if True\n",
     "tests": "a_netted_counter_may_fall"
+  },
+  {
+    "label": "sensor: a register the meter leaves empty must not become a sensor",
+    "path": "custom_components/wago_879/sensor.py",
+    "old": "        if not _is_populated(description, runtime):\n            continue\n",
+    "new": "",
+    "tests": "a_register_the_meter_leaves_empty_gets_no_sensor"
+  },
+  {
+    "label": "diagnostics: the address must be redacted",
+    "path": "custom_components/wago_879/diagnostics.py",
+    "old": "TO_REDACT = {CONF_HOST, \"serial_number\", \"unique_id\"}\n",
+    "new": "TO_REDACT = {\"serial_number\", \"unique_id\"}\n",
+    "tests": "diagnostics_carry_the_readings_without_address_or_serial"
+  },
+  {
+    "label": "repairs: a new setup attempt must clear the previous attempt's issue",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))\n    host = str(entry.data[CONF_HOST])\n",
+    "new": "    host = str(entry.data[CONF_HOST])\n",
+    "tests": "a_blocked_adoption_is_a_repair_until_it_goes_through or does_not_outlive"
   }
 ]

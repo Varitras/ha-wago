@@ -1,7 +1,8 @@
 # WAGO 879 Energy Meter
 
 A Home Assistant custom integration for the WAGO 879-3000 energy meter
-(4PU/4PS/2PU CT variants) fitted with the **879-9000** Modbus TCP/RTU module.
+fitted with the **879-9000** Modbus TCP/RTU module (see
+[Supported devices](#supported-devices)).
 It reads the meter over Modbus TCP through Home Assistant's core `modbus`
 integration and **never writes** to it - there is no register on this meter
 that this integration sets.
@@ -17,7 +18,8 @@ interval; the identity group is read once, when the entry is set up.
   energy counters, the reactive-only per-quadrant (Q1-Q4) split, and the
   running day counters (total and per phase).
 - **Identity** - serial number, meter code, firmware/hardware version, Modbus
-  unit id, CT ratio, rated current, and a few operational counters.
+  unit id, CT ratio (when the meter reports one), rated current, and a few
+  operational counters.
 
 ### Entity visibility
 
@@ -31,10 +33,60 @@ interval; the identity group is read once, when the entry is set up.
 | Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
 | Identity: CT ratio, Modbus unit id, current quadrant | enabled, **diagnostic** | |
 
+Voltage average, current average and the CT ratio sit on registers the WAGO
+manual shades grey; a direct-measuring meter leaves them at zero. They are
+created only when the meter reports a non-zero voltage average or CT ratio at
+setup - current average follows voltage average, since 0 A is a real reading
+at no load. On a meter that leaves them empty they do not appear, and sensors
+created by an earlier version show as no longer provided and can be deleted.
+
 The serial number, meter code, protocol version and the firmware and hardware
 versions are not entities at any enablement level. Serial number, firmware and
 hardware version appear on the device card; meter code and protocol version are
 read at setup but not surfaced.
+
+## Supported devices
+
+- **Tested:** the WAGO 879-3000 in its 4PU variant (direct measuring, meter
+  code 1111) behind an 879-9000 module, over Modbus TCP.
+- **Expected to work, untested:** the 4PS and 2PU CT variants. WAGO documents
+  one register map for all three; a variant that fills registers the 4PU
+  leaves empty gets the matching sensors (voltage and current average, CT
+  ratio), see [Entity visibility](#entity-visibility).
+- **Not supported:** other WAGO meters, and the 879-9000 over Modbus RTU.
+
+## Use cases
+
+- **Energy dashboard** - use *Active energy import* as grid consumption and
+  *Active energy export* as return to grid. The netted *Active energy total*
+  can fall, so it is not the right source for the dashboard.
+- **Phase balance** - compare current and active power per phase to spot a
+  phase that carries most of the load.
+- **Supply quality** - watch the phase and line voltages and the frequency,
+  and be told when they leave the tolerated band.
+
+## Examples
+
+Be notified when a phase voltage stays below the lower limit of EN 50160
+(230 V - 10 %) for a minute:
+
+```yaml
+automation:
+  - alias: "Low voltage on L1"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.wago_3456_voltage_l1
+        below: 207
+        for: "00:01:00"
+    actions:
+      - action: persistent_notification.create
+        data:
+          message: "Voltage L1 is {{ states('sensor.wago_3456_voltage_l1') }} V"
+```
+
+A direct-measuring meter does not report a voltage average. The **Min/Max**
+helper (Settings -> Devices & services -> Helpers) builds one from the three
+phase voltages, set to *arithmetic mean*.
 
 ## Requirements
 
@@ -49,7 +101,20 @@ read at setup but not surfaced.
    Integration) if it is not already listed.
 2. Install "WAGO 879 Energy Meter" and restart Home Assistant.
 3. Add the integration from **Settings -> Devices & services -> Add
-   integration** and enter the meter's host, port and Modbus unit id.
+   integration** and fill in:
+
+   | Field | What to enter |
+   |---|---|
+   | Host | IP address or host name of the 879-9000 module |
+   | Port | TCP port of the module; 502 unless it was changed there |
+   | Modbus unit id | the address set on the meter itself (factory setting 1) |
+   | Poll interval for measurements | seconds between reads of voltage, current, power; default 15 |
+   | Poll interval for energy counters | seconds between reads of the counters; default 300 |
+
+   The integration reads the meter's serial number before it saves anything,
+   so a wrong address or unit id is reported right away. Host, port and unit
+   id can be changed later with **Reconfigure**, the intervals under
+   **Configure**.
 
 ## Migrating from a YAML `modbus:` block
 
@@ -107,6 +172,59 @@ and has no interval:
 - **Energy interval** - the energy counters; default 300 seconds.
 
 Both can be changed from the integration's options, within 5-3600 seconds.
+
+A poll that fails keeps the last values; only the fourth failed poll in a row
+marks the entities unavailable, and the next good poll brings them back. A
+meter whose link is down is logged at *info*, not as an error.
+
+## Known limitations
+
+- **Read-only.** The integration never writes to the meter: switching the
+  tariff, resetting the day counters or changing Modbus settings is not
+  possible from Home Assistant.
+- **Only the 4PU variant is tested** (see [Supported devices](#supported-devices)).
+- **CT ratio** is shown as the two raw words the meter sends. The manual
+  prints its example in a way that leaves open whether they are decimal or
+  hexadecimal, and no CT meter was available to settle it.
+- **Registers the manual shades grey** get a sensor only when the meter
+  reports a non-zero value at setup; a meter that starts filling them later
+  needs the integration reloaded.
+- **One meter per entry**; several meters mean several entries, each with
+  its own host or unit id.
+
+## Troubleshooting
+
+- **"The meter did not answer"** when adding it - check the host and port
+  (Modbus TCP uses 502) and that the 879-9000 module is reachable from Home
+  Assistant; the Modbus unit id has to match the one set on the meter.
+- **"Another integration already uses this address with different link
+  settings"** - another Modbus configuration talks to the same address with a
+  different framer or settings. Remove the duplicate.
+- **Setup keeps retrying after a migration** - Home Assistant shows a repair
+  issue under **Settings -> System -> Repairs** saying what is in the way,
+  usually a `modbus:` block that is still loaded.
+- **"answers as serial ..., but this entry belongs to serial ..."** - a
+  different meter answers at the saved address. Use **Reconfigure** to point
+  the entry at the right address, or add the other meter as its own entry.
+- **More detail** - enable debug logging for the integration:
+
+  ```yaml
+  logger:
+    logs:
+      custom_components.wago_879: debug
+  ```
+
+  The integration's **Download diagnostics** gives the readings and settings
+  with the address and serial number removed, ready to attach to an issue.
+
+## Removal
+
+1. **Settings -> Devices & services -> WAGO 879 Energy Meter**, open the
+   entry's menu and choose **Delete**. This removes the device and its
+   entities; the history recorded under their entity ids stays in the
+   database until the recorder purges it.
+2. If it was installed through HACS, remove it there and restart Home
+   Assistant.
 
 ## Setting up a development environment
 

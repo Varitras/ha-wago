@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
+from custom_components.wago_879 import sensor
 from custom_components.wago_879.entity_descriptions import (
     LEGACY_UNIQUE_IDS,
     OMITTED_FIELDS,
@@ -22,6 +23,7 @@ from custom_components.wago_879.wago_879_api.registers import (
     IDENTITY_FIELDS,
     MEASUREMENT_FIELDS,
     Energy,
+    Identity,
     Measurements,
     address_of,
 )
@@ -185,3 +187,66 @@ def test_a_netted_counter_may_fall_and_is_not_total_increasing(key):
 def test_a_directed_counter_stays_total_increasing(key):
     """Import, export and the quadrants only ever rise."""
     assert _by_key(key).state_class is SensorStateClass.TOTAL_INCREASING
+
+
+# The rows the manual (appendix A3.2) shades grey without saying why. A
+# direct-measuring 4PU holds 0 in every one of them - read twice on a live
+# meter; whether another variant fills them is not documented.
+GREY_ADDRESSES = {
+    0x4010,  # LCD rolling time
+    0x401F,  # CT ratio
+    0x4020,  # CT ratio, second word
+    0x4025,  # reserved
+    *range(0x4027, 0x402B),  # reserved
+    0x5000,  # "Voltage*"
+    0x5001,
+    0x500A,  # "Current*"
+    0x500B,
+}
+
+
+def _words(field: str) -> set[int]:
+    component = next(
+        candidate
+        for candidate in (Identity, Measurements, Energy)
+        if field in candidate.declared_fields
+    )
+    first = address_of(component, field)
+    return set(range(first, first + component.declared_fields[field].count))
+
+
+def test_a_sensor_on_a_grey_register_is_created_only_when_the_meter_fills_it():
+    """ "Voltage average 0.0 V" sat next to three phases at 240 V: the meter
+    left the register empty and the sensor reported the empty word as a value."""
+    ungated = [
+        description.key
+        for description in SENSOR_DESCRIPTIONS
+        if _words(description.key) & GREY_ADDRESSES
+        and description.populated_when_nonzero is None
+    ]
+    assert not ungated
+
+
+def test_the_gate_names_a_field_the_setup_has_read():
+    """Only identity and measurements are read before the platforms are set up."""
+    read_at_setup = {*IDENTITY_FIELDS, *MEASUREMENT_FIELDS}
+    for description in SENSOR_DESCRIPTIONS:
+        gate = description.populated_when_nonzero
+        assert gate is None or gate in read_at_setup, description.key
+
+
+def test_the_platform_leaves_updates_to_the_coordinators():
+    """The quality scale's parallel-updates rule: sensors fed by a coordinator
+    never update on their own, so the platform limits nothing."""
+    assert sensor.PARALLEL_UPDATES == 0
+
+
+def test_the_rated_current_is_a_current():
+    """The manual gives "Meter amp" in amperes."""
+    rated = next(
+        description
+        for description in SENSOR_DESCRIPTIONS
+        if description.key == "meter_amperes"
+    )
+    assert rated.device_class is SensorDeviceClass.CURRENT
+    assert rated.native_unit_of_measurement == "A"

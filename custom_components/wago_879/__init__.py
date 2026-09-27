@@ -14,6 +14,7 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
 )
+from homeassistant.helpers import issue_registry as ir
 
 from . import entity_id_rename, migration
 from .const import (
@@ -26,6 +27,9 @@ from .const import (
     DEFAULT_MEASUREMENT_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_UNIT_ID,
+    DOMAIN,
+    INTERVAL_FIELDS,
+    INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .logging_policy import mask, redact
@@ -35,12 +39,21 @@ from .wago_879_api.device import WagoMeter
 PLATFORMS = [Platform.SENSOR]
 
 
+def _adoption_blocked(entry: WagoConfigEntry) -> str:
+    """The repair issue a refused adoption raises for `entry`."""
+    return f"adoption_blocked_{entry.entry_id}"
+
+
 def _setting(entry: WagoConfigEntry, key: str, default: int) -> int:
     return int(entry.options.get(key, entry.data.get(key, default)))
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """Read the identity, adopt the YAML entities, start both pollers."""
+    # An issue describes the attempt that raised it. Cleared before anything
+    # can fail, so a later attempt that stops earlier - the meter offline, say
+    # - does not leave it claiming an obstacle that may be gone.
+    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
     host = str(entry.data[CONF_HOST])
     # Core logs the title on every setup failure - "Error setting up entry
     # <title>" - and earlier versions titled the entry with the address. Done
@@ -61,12 +74,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
         # configurations, so the user has to see the helper's own message.
         # `from None` here and below: core writes the setup error with the
         # full traceback, and a chained cause would carry the unmasked text.
-        raise ConfigEntryError(redact(str(err), host)) from None
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="link_settings_clash",
+            translation_placeholders={"error": redact(str(err), host)},
+        ) from None
     meter = WagoMeter(unit)
     try:
         identity = await meter.async_read_identity()
     except ModbusError as err:
-        raise ConfigEntryNotReady(f"{mask(host)}: {redact(str(err), host)}") from None
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="meter_not_answering",
+            translation_placeholders={
+                "host": mask(host),
+                "error": redact(str(err), host),
+            },
+        ) from None
     serial = meter.serial_number
     assert serial is not None
     # Before adoption, the first refresh and the platforms: the device and every
@@ -77,14 +101,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     # flow always sets one, so that is only a hand-made entry.
     if entry.unique_id is not None and entry.unique_id != serial:
         raise ConfigEntryError(
-            f"The meter at {mask(host)} answers as serial "
-            f"{mask(serial)}, but this entry belongs to serial "
-            f"{mask(entry.unique_id)}. Point the entry at the address of meter "
-            f"{mask(entry.unique_id)} with Reconfigure, or add meter "
-            f"{mask(serial)} as its own entry."
+            translation_domain=DOMAIN,
+            translation_key="serial_mismatch",
+            translation_placeholders={
+                "host": mask(host),
+                "found": mask(serial),
+                "expected": mask(entry.unique_id),
+            },
         )
 
-    await migration.async_adopt_legacy_entities(hass, entry, serial)
+    # A refused adoption waits for the user, and a retrying entry is easy to
+    # miss: the repairs panel is where Home Assistant asks for that. The
+    # issue carries the refusal's own translation key and placeholders.
+    try:
+        await migration.async_adopt_legacy_entities(hass, entry, serial)
+    except ConfigEntryNotReady as err:
+        # Every refusal in migration.py is translated (test_translations pins
+        # it); the check only narrows the type.
+        if err.translation_key is not None:
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                _adoption_blocked(entry),
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key=err.translation_key,
+                translation_placeholders=err.translation_placeholders,
+            )
+        raise
     # After adoption: an adopted entity id is one of those this must not touch,
     # and it is only in the registry once adoption has put it there.
     entity_id_rename.async_rename_generated_entity_ids(hass, entry, serial)
@@ -134,3 +178,27 @@ async def _async_reload(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """Unload the platforms; the unit is released with the entry's unload hooks."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
+    """A deleted entry has nothing left to repair."""
+    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
+    """1.1 -> 1.2: the poll intervals move from data to options.
+
+    Options set since win - they are what the user chose last.
+    """
+    if entry.version > 1:
+        return False
+    if entry.minor_version < INTERVALS_IN_OPTIONS_MINOR_VERSION:
+        data = dict(entry.data)
+        moved = {key: data.pop(key) for key in INTERVAL_FIELDS if key in data}
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options={**moved, **entry.options},
+            minor_version=INTERVALS_IN_OPTIONS_MINOR_VERSION,
+        )
+    return True

@@ -242,6 +242,7 @@ files = [
   "custom_components/wago_879/wago_879_api/device.py",
   "custom_components/wago_879/entity_descriptions.py",
   "custom_components/wago_879/coordinator.py",
+  "custom_components/wago_879/diagnostics.py",
 ]
 
 explicit_package_bases = true

@@ -9,6 +9,13 @@
           "unit_id": "Modbus-Unit-ID des Zählers",
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des 879-9000 Modbus-TCP-Moduls.",
+          "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
+          "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1).",
+          "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
+          "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
       },
       "reconfigure": {
@@ -17,13 +24,19 @@
           "host": "Host",
           "port": "Port",
           "unit_id": "Modbus-Unit-ID des Zählers"
+        },
+        "data_description": {
+          "host": "Neue Adresse des Moduls. Dort muss derselbe Zähler antworten; ein Zähler mit anderer Seriennummer wird abgelehnt.",
+          "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
+          "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1)."
         }
       }
     },
     "error": {
       "cannot_connect": "Der Zähler antwortet nicht",
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
-      "invalid_host": "Hostname oder IP-Adresse eingeben"
+      "invalid_host": "Hostname oder IP-Adresse eingeben",
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
     },
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
@@ -37,8 +50,15 @@
         "data": {
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
+        },
+        "data_description": {
+          "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
+          "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
       }
+    },
+    "error": {
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
     }
   },
   "entity": {
@@ -373,6 +393,53 @@
       "ct_ratio_secondary": {
         "name": "Wandlerverhältnis sekundär"
       }
+    }
+  },
+  "exceptions": {
+    "link_settings_clash": {
+      "message": "Eine andere Integration nutzt die Adresse des Zählers bereits mit anderen Verbindungseinstellungen: {error}"
+    },
+    "meter_not_answering": {
+      "message": "Der Zähler unter {host} hat nicht geantwortet: {error}"
+    },
+    "serial_mismatch": {
+      "message": "Der Zähler unter {host} meldet die Seriennummer {found}, dieser Eintrag gehört aber zur Seriennummer {expected}. Richte den Eintrag mit „Neu konfigurieren“ auf die Adresse von Zähler {expected}, oder füge Zähler {found} als eigenen Eintrag hinzu."
+    },
+    "yaml_still_active": {
+      "message": "{entity_id} wird noch von der YAML-Modbus-Konfiguration bereitgestellt. Entferne den modbus:-Block für diesen Zähler, starte neu und richte die Integration dann erneut ein."
+    },
+    "unique_id_taken": {
+      "message": "{entity_id} kann nicht nach {unique_id} verschoben werden: Diese Unique-ID ist bereits als {held_by} registriert. Entferne zuerst {held_by}."
+    },
+    "removed_entry_in_the_way": {
+      "message": "{entity_id} kann nicht übernommen werden: Home Assistant kennt noch eine gelöschte Entität für {unique_id} und würde sie als {restored} zurückholen. Gelöschte Entitäten vergisst Home Assistant 30 Tage nach dem Entfernen."
+    },
+    "entity_id_taken": {
+      "message": "{entity_id} konnte nicht übernommen werden: Die Registry vergab {created}. Entferne die veraltete Entität, die diese ID belegt."
+    },
+    "read_timed_out": {
+      "message": "{poller}: Modbus-Lesezugriff nach {seconds}s abgebrochen"
+    },
+    "read_failed": {
+      "message": "{poller}: Modbus-Lesezugriff fehlgeschlagen: {error}"
+    }
+  },
+  "issues": {
+    "yaml_still_active": {
+      "title": "Der YAML-Modbus-Block bedient diesen Zähler noch",
+      "description": "{entity_id} wird noch von der YAML-Konfiguration `modbus:` bereitgestellt, deshalb kann die Historie noch nicht in diese Integration übernommen werden.\n\nEntferne den `modbus:`-Block für diesen Zähler aus der Konfiguration und starte Home Assistant neu. Danach übernimmt die Integration die Entitäts-IDs selbst."
+    },
+    "unique_id_taken": {
+      "title": "Eine Zähler-Entität blockiert die Übernahme",
+      "description": "{entity_id} kann nicht nach {unique_id} verschoben werden: Diese Unique-ID ist bereits als {held_by} registriert.\n\nEntferne {held_by} unter Einstellungen -> Entitäten. Die Integration versucht es danach selbst erneut."
+    },
+    "removed_entry_in_the_way": {
+      "title": "Eine gelöschte Entität blockiert die Übernahme",
+      "description": "{entity_id} kann nicht übernommen werden: Home Assistant kennt noch eine gelöschte Entität für {unique_id} und würde stattdessen {restored} zurückholen.\n\nHome Assistant vergisst gelöschte Entitäten 30 Tage nach dem Entfernen und bietet keinen Weg, das früher zu tun. Warte entweder so lange, oder stoppe Home Assistant, lege eine Sicherung an und entferne den Eintrag mit der Entitäts-ID {restored} aus `deleted_entities` in `.storage/core.entity_registry`. Die Integration versucht es danach selbst erneut."
+    },
+    "entity_id_taken": {
+      "title": "Eine Entitäts-ID konnte nicht übernommen werden",
+      "description": "{entity_id} konnte nicht übernommen werden: Die Registry vergab {created}.\n\nEntferne die veraltete Entität, die {entity_id} belegt, und lade die Integration neu."
     }
   }
 }
