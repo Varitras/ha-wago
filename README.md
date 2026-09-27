@@ -101,7 +101,20 @@ phase voltages, set to *arithmetic mean*.
    Integration) if it is not already listed.
 2. Install "WAGO 879 Energy Meter" and restart Home Assistant.
 3. Add the integration from **Settings -> Devices & services -> Add
-   integration** and enter the meter's host, port and Modbus unit id.
+   integration** and fill in:
+
+   | Field | What to enter |
+   |---|---|
+   | Host | IP address or host name of the 879-9000 module |
+   | Port | TCP port of the module; 502 unless it was changed there |
+   | Modbus unit id | the address set on the meter itself (factory setting 1) |
+   | Poll interval for measurements | seconds between reads of voltage, current, power; default 15 |
+   | Poll interval for energy counters | seconds between reads of the counters; default 300 |
+
+   The integration reads the meter's serial number before it saves anything,
+   so a wrong address or unit id is reported right away. Host, port and unit
+   id can be changed later with **Reconfigure**, the intervals under
+   **Configure**.
 
 ## Migrating from a YAML `modbus:` block
 
