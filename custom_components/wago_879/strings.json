@@ -35,7 +35,8 @@
     "error": {
       "cannot_connect": "The meter did not answer",
       "link_settings_clash": "Another integration already uses this address with different link settings",
-      "invalid_host": "Enter a host name or IP address"
+      "invalid_host": "Enter a host name or IP address",
+      "not_a_whole_number": "Enter a whole number"
     },
     "abort": {
       "already_configured": "This meter is already configured",
@@ -55,6 +56,9 @@
           "energy_interval": "How often the energy counters are read. They change slowly, so a longer interval keeps the load on the Modbus link low."
         }
       }
+    },
+    "error": {
+      "not_a_whole_number": "Enter a whole number"
     }
   },
   "entity": {

@@ -42,6 +42,7 @@ PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
 UNIT_ID_MAX = 247
 SECONDS = "s"
+NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 # Named tuple, not an inline literal in the `except` clause: at this project's
 # `target-version = "py314"` the formatter drops the parentheses (PEP 758
 # allows that from 3.14 on), and the file then no longer parses under the
@@ -70,12 +71,26 @@ def _seconds(minimum: int, maximum: int) -> NumberSelector:
     )
 
 
-def _as_integers(user_input: dict[str, Any]) -> dict[str, Any]:
-    """The form's numbers as integers: a number selector hands over floats."""
-    return {
-        key: value if key == CONF_HOST else int(value)
-        for key, value in user_input.items()
-    }
+def _as_integers(user_input: dict[str, Any]) -> dict[str, Any] | None:
+    """The form's numbers as integers, or None when one is not a whole number.
+
+    A number selector hands over floats, and its step of 1 binds the UI only:
+    the flow API takes 502.5 or "nan" as well. Rounding would store a setting
+    nobody entered, so anything not whole and finite is refused.
+    """
+    converted: dict[str, Any] = {}
+    for key, value in user_input.items():
+        if key == CONF_HOST:
+            converted[key] = value
+            continue
+        try:
+            number = float(value)
+        except TypeError, ValueError:
+            return None
+        if not number.is_integer():
+            return None
+        converted[key] = int(number)
+    return converted
 
 
 def _connection_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
@@ -154,7 +169,10 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = normalised_host(user_input)
         if host is None:
             return {"base": "invalid_host"}, None
-        user_input.update(_as_integers(user_input))
+        whole = _as_integers(user_input)
+        if whole is None:
+            return {"base": NOT_A_WHOLE_NUMBER}, None
+        user_input.update(whole)
         user_input[CONF_HOST] = host
         serial, error = await probe_serial(self.hass, user_input)
         if error is not None:
@@ -227,9 +245,15 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """The one options page."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(data=_as_integers(user_input))
+            whole = _as_integers(user_input)
+            if whole is not None:
+                return self.async_create_entry(data=whole)
+            errors["base"] = NOT_A_WHOLE_NUMBER
         current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
-            step_id="init", data_schema=vol.Schema(_interval_schema(current))
+            step_id="init",
+            data_schema=vol.Schema(_interval_schema(current)),
+            errors=errors,
         )

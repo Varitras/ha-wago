@@ -35,7 +35,8 @@
     "error": {
       "cannot_connect": "Der Zähler antwortet nicht",
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
-      "invalid_host": "Hostname oder IP-Adresse eingeben"
+      "invalid_host": "Hostname oder IP-Adresse eingeben",
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
     },
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
@@ -55,6 +56,9 @@
           "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
       }
+    },
+    "error": {
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
     }
   },
   "entity": {

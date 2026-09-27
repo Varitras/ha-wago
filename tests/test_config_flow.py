@@ -291,3 +291,30 @@ async def test_an_entry_from_an_earlier_version_moves_its_intervals_to_options(h
     assert entry.minor_version == 2
     assert entry.data == {CONF_HOST: HOST, CONF_PORT: 502, CONF_UNIT_ID: 1}
     assert entry.options == {CONF_MEASUREMENT_INTERVAL: 15, CONF_ENERGY_INTERVAL: 600}
+
+
+@pytest.mark.parametrize(
+    "bad", [{CONF_PORT: 502.5}, {CONF_UNIT_ID: "nan"}, {CONF_ENERGY_INTERVAL: 300.5}]
+)
+async def test_a_number_that_is_not_whole_is_refused_not_rounded(hass, bad):
+    """The selector's step=1 binds the UI only; the flow API takes any number,
+    and 502.5 silently stored as 502 is a setting nobody entered."""
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], {**USER_INPUT, **bad}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "not_a_whole_number"}
+
+
+async def test_the_options_refuse_a_number_that_is_not_whole(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_MEASUREMENT_INTERVAL: 30.5, CONF_ENERGY_INTERVAL: 600},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "not_a_whole_number"}
+    assert entry.options == {}
