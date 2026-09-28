@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from .wago_879_api.addresses import is_host_address
-from .wago_879_api.device import MODULE_SERVERS, MODULE_SWITCHES
+from .wago_879_api.device import MODULE_SERVERS, MODULE_SWITCHES, WORD_RANGE
 from .wago_879_api.registers import HOSTNAME_WORDS
 
 # How the module stores a server or gateway that is not set; its tool
@@ -26,6 +26,9 @@ PREFIX_RANGE = range(1, 31)
 # fills the block would lose it.
 HOSTNAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", re.ASCII)
 HOSTNAME_MAX_LENGTH = HOSTNAME_WORDS * 2 - 1
+# One register word, and a module that waits no time at all for the meter
+# never gets an answer; the module's own limits are not known.
+TIMEOUT_RANGE = range(1, WORD_RANGE)
 # A named tuple for the same reason as config_flow's _PROBE_FAILURES.
 _NOT_A_NUMBER = (TypeError, ValueError)
 
@@ -113,6 +116,8 @@ def _settings(form: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
         _check_server(settings[key])
     if "hostname" in changed:
         _check_hostname(settings["hostname"])
+    if "timeout" in changed and settings["timeout"] not in TIMEOUT_RANGE:
+        raise _Refused("invalid_timeout")
     if "ip_address" in changed and settings["ip_address"] != UNSET:
         _check_server(settings["ip_address"])
     # Checked with DHCP on too: the fixed settings are written either way and

@@ -223,8 +223,9 @@ class WagoModule:
 
         Both blocks go whole, then "store", then "apply". The keys are those
         of WRITABLE_FIELDS; every word a change does not touch is read first
-        and written back as it was. Raises ModbusError when nothing was
-        stored, ModuleNotApplied when only "apply" went unanswered.
+        and written back as it was. Raises ModbusError when a block or
+        "store" went unanswered - the module may still have stored it, but
+        it did not say so - and ModuleNotApplied when only "apply" did.
         """
         # Whole blocks read just before: two writes interleaved would put back
         # what the other one changed.

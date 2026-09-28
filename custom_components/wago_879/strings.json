@@ -108,7 +108,8 @@
       "invalid_netmask": "Enter a netmask such as 255.255.255.0",
       "invalid_hostname": "A host name has at most 31 letters, digits and hyphens, and neither starts nor ends with a hyphen",
       "gateway_outside_network": "The gateway has to be another address in the module's network",
-      "module_write_failed": "The module did not accept the settings. If its address changed, the entry follows it once the search finds the module."
+      "module_write_failed": "The module did not accept the settings. If its address changed, the entry follows it once the search finds the module.",
+      "invalid_timeout": "Enter a timeout between 1 and 65535 ms"
     },
     "abort": {
       "module_not_answering": "The module did not answer; its settings cannot be shown",

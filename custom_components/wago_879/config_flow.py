@@ -66,8 +66,6 @@ PORT_MAX = 65535
 UNIT_ID_MAX = 247
 SECONDS = "s"
 MILLISECONDS = "ms"
-# A register word's range; the module's own limits are not known.
-MODULE_TIMEOUT_MAX = WORD_RANGE - 1
 NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 # Named tuple, not an inline literal in the `except` clause: at this project's
 # `target-version = "py314"` the formatter drops the parentheses (PEP 758
@@ -77,9 +75,8 @@ NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 _PROBE_FAILURES = (ModbusError, TimeoutError)
 # What the meter behind each found module answered, by module serial.
 # ponytail: kept until Home Assistant restarts, so a meter swapped behind its
-# module or one that was down at its first probe is offered after a restart
-# or added by hand; probing again every quarter hour would take one of the
-# module's four connections each time.
+# module is offered after a restart or added by hand; probing again every
+# quarter hour would take one of the module's four connections each time.
 PROBED_METERS: HassKey[dict[str, tuple[str | None, str | None]]] = HassKey(
     f"{DOMAIN}_probed_meters"
 )
@@ -407,9 +404,14 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # ponytail: a meter on another unit id or port is not offered; adding
         # it by hand still works.
         probed = self.hass.data.setdefault(PROBED_METERS, {})
-        if module.serial_number not in probed:
-            probed[module.serial_number] = await probe_serial(self.hass, connection)
-        serial, error = probed[module.serial_number]
+        if module.serial_number in probed:
+            serial, error = probed[module.serial_number]
+        else:
+            serial, error = await probe_serial(self.hass, connection)
+        # Only an answer is kept: a meter that is down, or a module with its
+        # four connections in use, is asked again by the next search.
+        if error is None or error == "unsupported_meter":
+            probed[module.serial_number] = serial, error
         if error is not None:
             return self.async_abort(reason=error)
         assert serial is not None
@@ -478,10 +480,12 @@ def _module_schema() -> vol.Schema:
             vol.Optional("ntp_server_1"): address,
             vol.Optional("ntp_server_2"): address,
             vol.Required("hostname"): TextSelector(),
+            # The whole word: module_settings refuses a new 0, while one the
+            # module already holds has to reach the page and go back.
             vol.Required("timeout"): NumberSelector(
                 NumberSelectorConfig(
-                    min=1,
-                    max=MODULE_TIMEOUT_MAX,
+                    min=0,
+                    max=WORD_RANGE - 1,
                     step=1,
                     mode=NumberSelectorMode.BOX,
                     unit_of_measurement=MILLISECONDS,

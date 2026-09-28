@@ -83,6 +83,10 @@ def test_a_server_left_out_of_the_form_is_not_set():
         ({"timeout": 2500.5}, "not_a_whole_number"),
         ({"timeout": "nan"}, "not_a_whole_number"),
         ({"timeout": "soon"}, "not_a_whole_number"),
+        ({"timeout": 0}, "invalid_timeout"),
+        ({"timeout": 65536}, "invalid_timeout"),
+        # "This network": no host may have an address from 0.0.0.0/8.
+        ({"ntp_server_1": "0.1.2.3"}, "invalid_address"),
     ],
 )
 def test_a_setting_the_module_cannot_use_is_refused(changes, error):
@@ -138,3 +142,12 @@ def test_a_value_the_module_holds_does_not_block_another_change():
     assert error is None
     assert settings["timeout"] == 2500
     assert settings["hostname"] == "meter_room"
+
+
+def test_a_timeout_of_zero_the_module_holds_does_not_block_saving():
+    held = {**CURRENT, "timeout": 0}
+
+    settings, error = _check({"timeout": 0, "hostname": "meter-room"}, held)
+
+    assert error is None
+    assert settings["timeout"] == 0

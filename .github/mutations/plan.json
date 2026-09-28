@@ -191,8 +191,8 @@
   {
     "label": "discovery: a meter must be probed once per run",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "        if module.serial_number not in probed:\n",
-    "new": "        if True:\n",
+    "old": "        if module.serial_number in probed:\n",
+    "new": "        if False:\n",
     "tests": "ignored_meter_is_probed_once"
   },
   {
@@ -292,5 +292,33 @@
     "old": "    *MODULE_SERVERS,\n",
     "new": "",
     "tests": "carry_the_module_without_its_addresses"
+  },
+  {
+    "label": "discovery: a meter that did not answer must be asked again",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if error is None or error == \"unsupported_meter\":\n",
+    "new": "        if True:\n",
+    "tests": "did_not_answer_is_asked_again"
+  },
+  {
+    "label": "module page: a new timeout must stay within the word",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if \"timeout\" in changed and settings[\"timeout\"] not in TIMEOUT_RANGE:\n",
+    "new": "    if False:\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "addresses: 0.0.0.0/8 is no host's address",
+    "path": "custom_components/wago_879/wago_879_api/addresses.py",
+    "old": "        address in THIS_NETWORK\n",
+    "new": "        address.is_unspecified\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a timeout the module holds must reach the page",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "                    min=0,\n",
+    "new": "                    min=1,\n",
+    "tests": "timeout_the_form_would_refuse"
   }
 ]

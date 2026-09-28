@@ -919,3 +919,26 @@ async def test_a_search_that_cannot_open_a_socket_leaves_the_host_to_type(
     fields = {str(key): value for key, value in started["data_schema"].schema.items()}
 
     assert isinstance(fields[CONF_HOST], TextSelector)
+
+
+async def test_a_meter_that_did_not_answer_is_asked_again_by_the_next_search(
+    hass, meter
+):
+    """Only an answer is kept: a meter being installed, or a module with all
+    four connections busy, gets offered once it answers."""
+    meter.fail_requests(ModbusConnectionError("down"))
+    assert (await _discover(hass))["reason"] == "cannot_connect"
+    meter.fail_requests(None)
+
+    result = await _discover(hass)
+
+    assert result["step_id"] == "discovery_confirm"
+
+
+async def test_the_module_page_opens_with_a_timeout_the_form_would_refuse(hass, meter):
+    """A value the module holds must reach the page and go back unchanged."""
+    entry = await _loaded_with_module(hass, meter, {0x0003: 0})
+
+    result = await _save_module(hass, entry, {"hostname": "meter-room"})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY

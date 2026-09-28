@@ -108,7 +108,8 @@
       "invalid_netmask": "Eine Netzmaske wie 255.255.255.0 eingeben",
       "invalid_hostname": "Ein Hostname hat höchstens 31 Buchstaben, Ziffern und Bindestriche und beginnt und endet nicht mit einem Bindestrich",
       "gateway_outside_network": "Das Gateway muss eine andere Adresse im Netz des Moduls sein",
-      "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet."
+      "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet.",
+      "invalid_timeout": "Einen Timeout zwischen 1 und 65535 ms eingeben"
     },
     "abort": {
       "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden",
