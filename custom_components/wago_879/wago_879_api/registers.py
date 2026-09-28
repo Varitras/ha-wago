@@ -28,7 +28,9 @@ def _number(address: int, *, count: int = 1) -> NumberField[int]:
     # NumberField is generic; without the explicit NumberField[int] return
     # type here, mypy cannot infer T from a bare NumberField(...) call and
     # reports "Need type annotation" at every use site instead of once here.
-    return NumberField(address, count=count)
+    # Unsigned: every whole number in both maps is a count, a code, an id or a
+    # duration; the library's signed default turned 40000 into -25536.
+    return NumberField(address, count=count, signed=False)
 
 
 class Identity(Component):

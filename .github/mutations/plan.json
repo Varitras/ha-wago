@@ -166,5 +166,12 @@
     "old": "    if not serial.isalnum() or not is_host_address(host):\n",
     "new": "    if not serial.isalnum():\n",
     "tests": "anything_but_a_module_reply_is_ignored"
+  },
+  {
+    "label": "registers: whole numbers must read unsigned",
+    "path": "custom_components/wago_879/wago_879_api/registers.py",
+    "old": "    return NumberField(address, count=count, signed=False)\n",
+    "new": "    return NumberField(address, count=count)\n",
+    "tests": "unsigned or above_32767"
   }
 ]

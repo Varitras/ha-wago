@@ -163,3 +163,16 @@ async def test_a_failed_write_is_not_stored(unit):
         await WagoModule(unit).async_write({"hostname": "meter-room"})
 
     assert 0x03F2 not in [write.address for write in writes]
+
+
+async def test_a_timeout_above_32767_reads_back_as_written(unit):
+    """The module's words are unsigned: 40000 ms is a timeout, not -25536."""
+    await WagoModule(unit).async_write({"timeout": 40000})
+
+    assert (await WagoModule(unit).async_read())["timeout"] == 40000
+
+
+async def test_version_words_are_unsigned(unit):
+    unit.load_raw({"holding": {0x0405: 40000}})
+
+    assert (await WagoModule(unit).async_read())["firmware_version"] == "1.0.40000"
