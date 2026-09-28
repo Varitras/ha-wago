@@ -41,7 +41,7 @@ from .const import (
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .discovery import async_start_discovery
 from .logging_policy import mask, redact
-from .sensor import entry_title, module_device_info
+from .sensor import MODULE_MODEL, entry_title, module_device_info
 from .wago_879_api.device import UnsupportedMeter, WagoMeter, WagoModule
 from .wago_879_api.registers import MODULE_UNIT_ID
 
@@ -227,9 +227,15 @@ def _register_module(
     """
     if module is None:
         return None
-    device = dr.async_get(hass).async_get_or_create(
+    devices = dr.async_get(hass)
+    device = devices.async_get_or_create(
         config_entry_id=entry.entry_id, **module_device_info(module)
     )
+    # A module that was replaced stays in the registry otherwise, with its
+    # entities, and the search would keep taking its serial for this entry.
+    for stale in dr.async_entries_for_config_entry(devices, entry.entry_id):
+        if stale.model == MODULE_MODEL and stale.id != device.id:
+            devices.async_update_device(stale.id, remove_config_entry_id=entry.entry_id)
     return device.id
 
 

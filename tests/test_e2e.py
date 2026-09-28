@@ -466,9 +466,38 @@ async def test_the_entry_follows_its_module_to_a_new_address(
         FoundModule(serial_number=MODULE_SERIAL, host="192.0.2.11")
     ]
     async_fire_time_changed(hass, dt_util.utcnow() + DISCOVERY_INTERVAL)
-    await hass.async_block_till_done()
+    # Discovery flows run as background tasks.
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert module_search.await_count == 2
     assert entry.data[CONF_HOST] == "192.0.2.11"
     assert entry.state is ConfigEntryState.LOADED
     assert meter.params_seen[-1].host == "192.0.2.11"
+
+
+async def test_a_replaced_module_leaves_the_entry_with_its_entities(hass, meter):
+    """After the meter moved to another module, the old one is no device of
+    this entry any more: its entities would stay, and the search would still
+    take its serial for this entry and move the entry back to it."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    # The replacement module: serial 033000000002.
+    meter.load_module_raw({"holding": {0x040A: 0x0002}})
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    devices = dr.async_get(hass)
+    old = devices.async_get_device_by_identifier(
+        (DOMAIN, MODULE_SERIAL), entry.entry_id
+    )
+    new = devices.async_get_device_by_identifier(
+        (DOMAIN, "033000000002"), entry.entry_id
+    )
+    assert old is None
+    assert new is not None
+    registry = er.async_get(hass)
+    assert (
+        registry.async_get_entity_id("sensor", DOMAIN, f"{MODULE_SERIAL}_hostname")
+        is None
+    )

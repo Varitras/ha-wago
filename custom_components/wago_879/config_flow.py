@@ -26,6 +26,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 from homeassistant.helpers.typing import DiscoveryInfoType
+from homeassistant.util.hass_dict import HassKey
 
 from .const import (
     CONF_ENERGY_INTERVAL,
@@ -46,9 +47,10 @@ from .const import (
 )
 from .discovery import async_find_modules
 from .module_settings import OPTIONAL_ADDRESSES, UNSET, module_settings
-from .sensor import device_name, entry_title
+from .sensor import MODULE_MODEL, device_name, entry_title
 from .wago_879_api.device import WORD_RANGE, UnsupportedMeter, WagoMeter, WagoModule
 from .wago_879_api.discovery import FoundModule
+from .wago_879_api.registers import MODULE_UNIT_ID
 
 PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
@@ -66,6 +68,14 @@ NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 # older interpreters that still read this tree - the Windows-side tooling
 # among them.
 _PROBE_FAILURES = (ModbusError, TimeoutError)
+# What the meter behind each found module answered, by module serial.
+# ponytail: kept until Home Assistant restarts, so a meter swapped behind its
+# module or one that was down at its first probe is offered after a restart
+# or added by hand; probing again every quarter hour would take one of the
+# module's four connections each time.
+PROBED_METERS: HassKey[dict[str, tuple[str | None, str | None]]] = HassKey(
+    f"{DOMAIN}_probed_meters"
+)
 
 
 def _whole_number(minimum: int, maximum: int) -> NumberSelector:
@@ -204,6 +214,20 @@ def _is_address(host: str) -> bool:
     return True
 
 
+def _module_serial_of(
+    hass: HomeAssistant, entry: config_entries.ConfigEntry
+) -> str | None:
+    """The serial of the module the entry's last setup reached, if any."""
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    for device in devices:
+        if device.model != MODULE_MODEL:
+            continue
+        for domain, serial in device.identifiers:
+            if domain == DOMAIN:
+                return serial
+    return None
+
+
 def _entry_of(
     hass: HomeAssistant,
     entries: Sequence[config_entries.ConfigEntry],
@@ -211,16 +235,38 @@ def _entry_of(
 ) -> config_entries.ConfigEntry | None:
     """The entry that already reaches `module`, or None.
 
-    Matched by its address, or by the module device its setup registered.
+    The module's serial decides. An address only counts for an entry that
+    never reached a module: DHCP hands the address of a module that left to
+    the next one, and two modules can swap theirs.
     """
-    devices = dr.async_get(hass)
-    identifier = (DOMAIN, module.serial_number)
+    serials = {entry.entry_id: _module_serial_of(hass, entry) for entry in entries}
     for entry in entries:
-        if entry.data.get(CONF_HOST) == module.host:
+        if serials[entry.entry_id] == module.serial_number:
             return entry
-        if devices.async_get_device_by_identifier(identifier, entry.entry_id):
+    for entry in entries:
+        if serials[entry.entry_id] is None and entry.data.get(CONF_HOST) == module.host:
             return entry
     return None
+
+
+async def _async_module_answers_at(
+    hass: HomeAssistant, module: FoundModule, port: int
+) -> bool:
+    """Whether the module answers at the address its search reply named.
+
+    A reply is a UDP datagram: collected seconds before it is read, so stale
+    after a change of address, and from anyone who saw the broadcast.
+    """
+    params = ModbusTcpParams(host=module.host, port=port)
+    try:
+        async with async_get_temporary_unit(hass, params, MODULE_UNIT_ID) as unit:
+            values = await WagoModule(unit).async_read()
+    except _PROBE_FAILURES:
+        return False
+    except HomeAssistantError:
+        # Another consumer holds that address with other link settings.
+        return False
+    return values is not None and values["serial_number"] == module.serial_number
 
 
 @callback
@@ -300,7 +346,9 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors, serial = await self._validate(user_input)
             if not errors:
                 assert serial is not None
-                await self.async_set_unique_id(serial)
+                # A flow of the same meter waiting under Discovered is not in
+                # the way: core aborts it once this entry exists.
+                await self.async_set_unique_id(serial, raise_on_progress=False)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=device_name(serial),
@@ -343,7 +391,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.hass, self._async_current_entries(include_ignore=False), module
         )
         if entry is not None:
-            return self._follow(entry, module.host)
+            return await self._async_follow(entry, module)
         connection = {
             CONF_HOST: module.host,
             CONF_PORT: DEFAULT_PORT,
@@ -351,7 +399,10 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         # ponytail: a meter on another unit id or port is not offered; adding
         # it by hand still works.
-        serial, error = await probe_serial(self.hass, connection)
+        probed = self.hass.data.setdefault(PROBED_METERS, {})
+        if module.serial_number not in probed:
+            probed[module.serial_number] = await probe_serial(self.hass, connection)
+        serial, error = probed[module.serial_number]
         if error is not None:
             return self.async_abort(reason=error)
         assert serial is not None
@@ -362,20 +413,23 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             DOMAIN, serial
         )
         if entry is not None and entry.source != config_entries.SOURCE_IGNORE:
-            return self._follow(entry, module.host)
+            return await self._async_follow(entry, module)
         self._abort_if_unique_id_configured()
         self._discovered = connection
         self.context["title_placeholders"] = {"name": device_name(serial)}
         return await self.async_step_discovery_confirm()
 
-    def _follow(
-        self, entry: config_entries.ConfigEntry, host: str
+    async def _async_follow(
+        self, entry: config_entries.ConfigEntry, module: FoundModule
     ) -> config_entries.ConfigFlowResult:
         """Point a known entry at the address its module was found at."""
+        host = entry.data[CONF_HOST]
         # A host name follows the module through DHCP by itself.
-        moved = entry.data[CONF_HOST] != host
-        if moved and _is_address(entry.data[CONF_HOST]):
-            async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: host})
+        moves = host != module.host and _is_address(host)
+        if moves and await _async_module_answers_at(
+            self.hass, module, int(entry.data[CONF_PORT])
+        ):
+            async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: module.host})
         return self.async_abort(reason="already_configured")
 
     async def async_step_discovery_confirm(

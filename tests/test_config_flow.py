@@ -17,6 +17,7 @@ from custom_components.wago_879.const import (
     DEFAULT_MEASUREMENT_INTERVAL,
     DOMAIN,
 )
+from custom_components.wago_879.sensor import MODULE_MODEL
 from custom_components.wago_879.wago_879_api.discovery import FoundModule
 from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 from homeassistant.components.modbus import async_get_unit
@@ -423,17 +424,26 @@ async def test_a_found_module_whose_meter_does_not_answer_is_not_offered(hass, m
     assert result["reason"] == "cannot_connect"
 
 
-def _own_module(hass, entry):
+def _own_module(hass, entry, serial=MODULE.serial_number):
     """The module device setup registers for an entry that reached it."""
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, MODULE.serial_number)},
+        identifiers={(DOMAIN, serial)},
+        model=MODULE_MODEL,
     )
 
 
-async def test_a_module_that_moved_takes_its_entry_along(hass):
+def _module_serial_words(serial):
+    """0x0408-0x040A as the module holds a serial: its digits as hex words."""
+    return {
+        0x0408 + index: int(serial[4 * index : 4 * index + 4], 16) for index in range(3)
+    }
+
+
+async def test_a_module_that_moved_takes_its_entry_along(hass, meter):
     """The module was given a new address; the entry follows and loads there,
     even with a unit id the search could not have guessed."""
+    meter.load_module_raw(module_holding())
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={**USER_INPUT, CONF_HOST: OLD_HOST, CONF_UNIT_ID: 1},
@@ -451,9 +461,11 @@ async def test_a_module_that_moved_takes_its_entry_along(hass):
     assert entry.state is ConfigEntryState.LOADED
 
 
-async def test_a_module_reached_by_host_name_keeps_the_name(hass):
+async def test_a_module_reached_by_host_name_keeps_the_name(hass, meter):
     """A host name follows the module through DHCP on its own; replacing it
     with today's address would break exactly that."""
+    # The module answers at the new address: only the name may stop the move.
+    meter.load_module_raw(module_holding())
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={**USER_INPUT, CONF_HOST: "wago-module"},
@@ -468,9 +480,10 @@ async def test_a_module_reached_by_host_name_keeps_the_name(hass):
     assert entry.data[CONF_HOST] == "wago-module"
 
 
-async def test_a_meter_known_without_its_module_gets_the_new_address(hass):
+async def test_a_meter_known_without_its_module_gets_the_new_address(hass, meter):
     """An entry whose setup never reached the module has no module device;
     the meter's own serial still ties the found module to it."""
+    meter.load_module_raw(module_holding())
     entry = MockConfigEntry(
         domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
     )
@@ -496,6 +509,8 @@ async def test_a_loaded_meter_known_without_its_module_reloads_once(
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    # After setup, so the entry has no module device to be found by.
+    meter.load_module_raw(module_holding())
     connections_before = len(meter.params_seen)
 
     result = await _discover(hass)
@@ -504,12 +519,13 @@ async def test_a_loaded_meter_known_without_its_module_reloads_once(
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == HOST
     assert entry.state is ConfigEntryState.LOADED
-    # The probe opens one connection, the single reload the second.
-    assert len(meter.params_seen) == connections_before + 2
+    # The meter probe, the module check at the new address, one reload.
+    assert len(meter.params_seen) == connections_before + 3
     assert "should use it for scheduling a reload" not in caplog.text
 
 
 async def test_a_meter_known_without_its_module_keeps_its_host_name(hass, meter):
+    meter.load_module_raw(module_holding())
     entry = MockConfigEntry(
         domain=DOMAIN, data={**USER_INPUT, CONF_HOST: "wago-module"}, unique_id=SERIAL
     )
@@ -519,6 +535,109 @@ async def test_a_meter_known_without_its_module_keeps_its_host_name(hass, meter)
 
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == "wago-module"
+
+
+OTHER_MODULE = "033000000002"
+
+
+async def test_a_new_module_on_an_entry_s_old_address_is_offered(hass, meter):
+    """DHCP handed a new module the address an entry still holds; the entry
+    has a module of its own, so the address alone says nothing."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    _own_module(hass, entry, OTHER_MODULE)
+    meter.load_raw({"holding": {0x4000: 0x0099, 0x4001: 0x8765}})
+
+    result = await _discover(hass)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
+    assert entry.data[CONF_HOST] == HOST
+
+
+async def test_two_modules_that_swapped_addresses_each_keep_their_entry(hass, meter):
+    meter.load_module_raw(module_holding())
+    # Added first: the entry now at the address is the one looked at first.
+    other = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id="00998765")
+    other.add_to_hass(hass)
+    _own_module(hass, other, OTHER_MODULE)
+    moved = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    moved.add_to_hass(hass)
+    _own_module(hass, moved)
+
+    result = await _discover(hass)
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "already_configured"
+    assert moved.data[CONF_HOST] == HOST
+    assert other.data[CONF_HOST] == HOST
+
+
+@pytest.mark.parametrize(
+    "module_raw",
+    [
+        # Another module answers there now: the reply was stale.
+        {
+            "holding": {
+                **module_holding()["holding"],
+                **_module_serial_words(OTHER_MODULE),
+            }
+        },
+        # Nothing module-like answers there: the reply was not the module's.
+        {"holding": {0x0400: 0}},
+    ],
+    ids=["another module", "no module"],
+)
+async def test_an_address_the_module_does_not_confirm_moves_nothing(
+    hass, meter, module_raw
+):
+    """A search reply is a UDP datagram: stale by the time it is read, or not
+    from the module at all. Before an entry moves, the module has to answer
+    at the new address with its own serial."""
+    meter.load_module_raw(module_raw)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == OLD_HOST
+
+
+async def test_an_ignored_meter_is_probed_once_per_run(hass, meter):
+    """The module takes four connections; a meter the user asked to leave
+    alone may not cost one every quarter hour."""
+    MockConfigEntry(
+        domain=DOMAIN, source="ignore", data={}, unique_id=SERIAL
+    ).add_to_hass(hass)
+
+    first = await _discover(hass)
+    connections = len(meter.params_seen)
+    second = await _discover(hass)
+
+    assert first["reason"] == second["reason"] == "already_configured"
+    assert len(meter.params_seen) == connections
+
+
+async def test_a_meter_waiting_under_discovered_can_be_added_by_hand(
+    hass, module_search
+):
+    module_search.return_value = [MODULE]
+    waiting = await _discover(hass)
+    assert waiting["step_id"] == "discovery_confirm"
+
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], USER_INPUT
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
 
 
 MODULE_FORM = {

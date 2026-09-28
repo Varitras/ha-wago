@@ -107,8 +107,8 @@
   {
     "label": "discovery: a host name must survive a found module's address",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "        if moved and _is_address(entry.data[CONF_HOST]):\n",
-    "new": "        if moved:\n",
+    "old": "        moves = host != module.host and _is_address(host)\n",
+    "new": "        moves = host != module.host\n",
     "tests": "reached_by_host_name_keeps_the_name"
   },
   {
@@ -173,5 +173,40 @@
     "old": "    return NumberField(address, count=count, signed=False)\n",
     "new": "    return NumberField(address, count=count)\n",
     "tests": "unsigned or above_32767"
+  },
+  {
+    "label": "discovery: an address must not outrank the module's serial",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if serials[entry.entry_id] is None and entry.data.get(CONF_HOST) == module.host:\n",
+    "new": "        if entry.data.get(CONF_HOST) == module.host:\n",
+    "tests": "entry_s_old_address_is_offered"
+  },
+  {
+    "label": "discovery: an entry may only move where its module answers",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if moves and await _async_module_answers_at(\n            self.hass, module, int(entry.data[CONF_PORT])\n        ):\n",
+    "new": "        if moves:\n",
+    "tests": "module_does_not_confirm_moves_nothing"
+  },
+  {
+    "label": "discovery: a meter must be probed once per run",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if module.serial_number not in probed:\n",
+    "new": "        if True:\n",
+    "tests": "ignored_meter_is_probed_once"
+  },
+  {
+    "label": "user step: a meter waiting under Discovered must not block adding it",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "                await self.async_set_unique_id(serial, raise_on_progress=False)\n",
+    "new": "                await self.async_set_unique_id(serial)\n",
+    "tests": "waiting_under_discovered_can_be_added_by_hand"
+  },
+  {
+    "label": "setup: a replaced module must leave the entry",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "        if stale.model == MODULE_MODEL and stale.id != device.id:\n",
+    "new": "        if False:\n",
+    "tests": "replaced_module_leaves_the_entry"
   }
 ]
