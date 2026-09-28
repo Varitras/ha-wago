@@ -244,6 +244,8 @@ files = [
   "custom_components/wago_879/coordinator.py",
   "custom_components/wago_879/diagnostics.py",
   "custom_components/wago_879/binary_sensor.py",
+  "custom_components/wago_879/discovery.py",
+  "custom_components/wago_879/wago_879_api/discovery.py",
 ]
 
 explicit_package_bases = true

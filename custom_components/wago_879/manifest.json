@@ -6,7 +6,8 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "modbus"
+    "modbus",
+    "network"
   ],
   "documentation": "https://github.com/Varitras/ha-wago",
   "integration_type": "device",

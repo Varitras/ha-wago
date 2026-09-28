@@ -13,12 +13,16 @@ from custom_components.wago_879.const import (
     CONF_MEASUREMENT_INTERVAL,
     CONF_PORT,
     CONF_UNIT_ID,
+    DEFAULT_ENERGY_INTERVAL,
+    DEFAULT_MEASUREMENT_INTERVAL,
     DOMAIN,
 )
+from custom_components.wago_879.wago_879_api.discovery import FoundModule
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers.selector import NumberSelector, TextSelector
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.selector import NumberSelector, SelectSelector, TextSelector
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -347,3 +351,168 @@ async def test_reconfigure_retitles_an_entry_still_named_after_its_old_address(h
 
     assert result["reason"] == "reconfigure_successful"
     assert entry.title == "WAGO 3456"
+
+
+MODULE = FoundModule(serial_number="033000000001", host=HOST)
+OLD_HOST = "192.0.2.99"
+
+
+async def test_the_user_step_offers_the_modules_the_search_found(hass, module_search):
+    module_search.return_value = [MODULE]
+
+    started = await _start(hass)
+    fields = {str(key): value for key, value in started["data_schema"].schema.items()}
+
+    host = fields[CONF_HOST]
+    assert isinstance(host, SelectSelector)
+    assert [option["value"] for option in host.config["options"]] == [HOST]
+    # A module in another subnet is never found, so an address can still be typed.
+    assert host.config["custom_value"] is True
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_the_user_step_leaves_out_a_module_already_configured(
+    hass, module_search
+):
+    MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL).add_to_hass(hass)
+    module_search.return_value = [MODULE]
+
+    started = await _start(hass)
+    fields = {str(key): value for key, value in started["data_schema"].schema.items()}
+
+    assert isinstance(fields[CONF_HOST], TextSelector)
+
+
+async def _discover(hass, module=MODULE):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "integration_discovery"},
+        data={"serial_number": module.serial_number, "host": module.host},
+    )
+
+
+async def test_a_found_module_is_offered_as_a_new_meter(hass):
+    result = await _discover(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "WAGO 3456"
+    assert result["data"] == {CONF_HOST: HOST, CONF_PORT: 502, CONF_UNIT_ID: 1}
+    assert result["options"] == {
+        CONF_MEASUREMENT_INTERVAL: DEFAULT_MEASUREMENT_INTERVAL,
+        CONF_ENERGY_INTERVAL: DEFAULT_ENERGY_INTERVAL,
+    }
+    assert result["result"].unique_id == SERIAL
+
+
+async def test_a_found_module_whose_meter_does_not_answer_is_not_offered(hass, meter):
+    meter.fail_requests(ModbusConnectionError("down"))
+
+    result = await _discover(hass)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
+
+
+def _own_module(hass, entry):
+    """The module device setup registers for an entry that reached it."""
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, MODULE.serial_number)},
+    )
+
+
+async def test_a_module_that_moved_takes_its_entry_along(hass):
+    """The module was given a new address; the entry follows and loads there,
+    even with a unit id the search could not have guessed."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, CONF_HOST: OLD_HOST, CONF_UNIT_ID: 1},
+        unique_id=SERIAL,
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+
+    result = await _discover(hass)
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == HOST
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_a_module_reached_by_host_name_keeps_the_name(hass):
+    """A host name follows the module through DHCP on its own; replacing it
+    with today's address would break exactly that."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, CONF_HOST: "wago-module"},
+        unique_id=SERIAL,
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "wago-module"
+
+
+async def test_a_meter_known_without_its_module_gets_the_new_address(hass):
+    """An entry whose setup never reached the module has no module device;
+    the meter's own serial still ties the found module to it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+
+    result = await _discover(hass)
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == HOST
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_a_loaded_meter_known_without_its_module_reloads_once(
+    hass, meter, caplog
+):
+    """Found by the meter's serial rather than the module device, a loaded
+    entry moves the way reconfigure moves it: one reload, and none of the
+    double reload core reports and drops in 2026.12."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    connections_before = len(meter.params_seen)
+
+    result = await _discover(hass)
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == HOST
+    assert entry.state is ConfigEntryState.LOADED
+    # The probe opens one connection, the single reload the second.
+    assert len(meter.params_seen) == connections_before + 2
+    assert "should use it for scheduling a reload" not in caplog.text
+
+
+async def test_a_meter_known_without_its_module_keeps_its_host_name(hass, meter):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: "wago-module"}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "wago-module"

@@ -11,7 +11,7 @@
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
         },
         "data_description": {
-          "host": "IP-Adresse oder Hostname des 879-9000 Modbus-TCP-Moduls.",
+          "host": "IP-Adresse oder Hostname des Modbus-TCP-Moduls 879-9000. Module in Home Assistants eigenen Subnetzen werden aufgelistet; eines in einem anderen Subnetz muss eingetippt werden.",
           "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
           "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1).",
           "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
@@ -30,6 +30,9 @@
           "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
           "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1)."
         }
+      },
+      "discovery_confirm": {
+        "description": "{name} unter {host} gefunden. Hinzufügen? Der Zähler wird mit Port 502, Unit-ID 1 und den Standard-Abfrageintervallen angelegt."
       }
     },
     "error": {
@@ -42,8 +45,13 @@
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
       "unique_id_mismatch": "Unter dieser Adresse hat ein anderer Zähler geantwortet; der Eintrag wurde nicht geändert.",
-      "reconfigure_successful": "Konfiguration aktualisiert"
-    }
+      "reconfigure_successful": "Konfiguration aktualisiert",
+      "already_in_progress": "Dieser Zähler wird bereits eingerichtet",
+      "cannot_connect": "Der Zähler antwortet nicht",
+      "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
+      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler"
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {

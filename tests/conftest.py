@@ -4,6 +4,8 @@ Declares the Home Assistant custom-component test plugin (the `hass` fixture
 and a matching Home Assistant install) and keeps every test off real hardware.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
@@ -33,6 +35,22 @@ def _no_real_meter(monkeypatch):
         )
 
     monkeypatch.setattr(CORE_CONNECTION, _refuse)
+
+
+# Where the integration sends its UDP search for modules.
+MODULE_SEARCH = "custom_components.wago_879.discovery.async_browse"
+
+
+@pytest.fixture(autouse=True)
+def module_search(monkeypatch):
+    """The modules a search finds: none, unless a test sets `return_value`.
+
+    Global for the same reason as `_no_real_meter`: every loaded entry starts
+    the background search.
+    """
+    search = AsyncMock(return_value=[])
+    monkeypatch.setattr(MODULE_SEARCH, search)
+    return search
 
 
 class SharedMockModbus:

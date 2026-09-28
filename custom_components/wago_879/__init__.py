@@ -16,7 +16,12 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
 )
-from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
+from homeassistant.helpers.typing import ConfigType
 
 from . import entity_id_rename, migration
 from .const import (
@@ -34,13 +39,25 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
+from .discovery import async_start_discovery
 from .logging_policy import mask, redact
 from .sensor import entry_title, module_device_info
 from .wago_879_api.device import UnsupportedMeter, WagoMeter, WagoModule
 from .wago_879_api.registers import MODULE_UNIT_ID
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Start the module search.
+
+    Here rather than per entry: the entry whose module moved is the one whose
+    setup keeps failing at the old address.
+    """
+    async_start_discovery(hass)
+    return True
 
 
 def _adoption_blocked(entry: WagoConfigEntry) -> str:

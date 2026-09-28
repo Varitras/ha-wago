@@ -24,7 +24,9 @@ from custom_components.wago_879.const import (
     DOMAIN,
 )
 from custom_components.wago_879.coordinator import FAILED_POLLS_TOLERATED
+from custom_components.wago_879.discovery import DISCOVERY_INTERVAL
 from custom_components.wago_879.logging_policy import mask
+from custom_components.wago_879.wago_879_api.discovery import FoundModule
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -449,3 +451,24 @@ async def test_a_meter_without_the_module_still_loads(hass):
         )
         is None
     )
+
+
+async def test_the_entry_follows_its_module_to_a_new_address(
+    hass, meter, module_search
+):
+    """The search runs at start and then every interval; a module that turns
+    up at another address takes its entry along without the user."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    assert module_search.await_count == 1
+
+    module_search.return_value = [
+        FoundModule(serial_number=MODULE_SERIAL, host="192.0.2.11")
+    ]
+    async_fire_time_changed(hass, dt_util.utcnow() + DISCOVERY_INTERVAL)
+    await hass.async_block_till_done()
+
+    assert module_search.await_count == 2
+    assert entry.data[CONF_HOST] == "192.0.2.11"
+    assert entry.state is ConfigEntryState.LOADED
+    assert meter.params_seen[-1].host == "192.0.2.11"

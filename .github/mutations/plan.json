@@ -103,5 +103,19 @@
     "old": "        info[\"via_device_id\"] = runtime.module_device_id\n",
     "new": "        pass\n",
     "tests": "the_module_is_its_own_device_with_every_setting"
+  },
+  {
+    "label": "discovery: a host name must survive a found module's address",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if moved and _is_address(entry.data[CONF_HOST]):\n",
+    "new": "        if moved:\n",
+    "tests": "reached_by_host_name_keeps_the_name"
+  },
+  {
+    "label": "discovery: the search must ask more than once",
+    "path": "custom_components/wago_879/wago_879_api/discovery.py",
+    "old": "        for _ in range(BROWSE_ATTEMPTS):\n",
+    "new": "        for _ in range(1):\n",
+    "tests": "asks_again_and_reports_each_module_once"
   }
 ]

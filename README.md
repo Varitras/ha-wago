@@ -109,7 +109,7 @@ phase voltages, set to *arithmetic mean*.
 
    | Field | What to enter |
    |---|---|
-   | Host | IP address or host name of the 879-9000 module |
+   | Host | IP address or host name of the 879-9000 module; modules found in Home Assistant's subnets are listed |
    | Port | TCP port of the module; 502 unless it was changed there |
    | Modbus unit id | the address set on the meter itself (factory setting 1) |
    | Poll interval for measurements | seconds between reads of voltage, current, power; default 15 |
@@ -119,6 +119,21 @@ phase voltages, set to *arithmetic mean*.
    so a wrong address or unit id is reported right away. Host, port and unit
    id can be changed later with **Reconfigure**, the intervals under
    **Configure**.
+
+## Discovery
+
+The integration searches Home Assistant's own subnets for 879-9000 modules
+the way WAGO's configuration tool does (a UDP broadcast to port 20000):
+
+- **When adding the integration**, the host field lists the modules found;
+  an address can still be typed.
+- **In the background**, once at start and every 15 minutes while an entry
+  of this integration exists:
+  - a module with a meter that is not set up yet appears under **Discovered**
+    (only a meter on port 502 and unit id 1; any other is added by hand);
+  - a module that turned up at a new address takes its entry along - the
+    entry's host is updated and the entry reloaded. An entry set up with a
+    host name keeps it.
 
 ## Migrating from a YAML `modbus:` block
 
@@ -198,8 +213,9 @@ meter whose link is down is logged at *info*, not as an error.
 - **At most four Modbus TCP connections** per 879-9000 module, according to
   WAGO's data sheet. Home Assistant uses one per module; every other program
   polling the same module takes one of the remaining three.
-- **No discovery.** The module announces itself to WAGO's own configuration
-  tool only, so it has to be added by address.
+- **Discovery stays within Home Assistant's subnets.** Routers do not pass
+  the search broadcast on; a module in another subnet is added by address.
+  A module leaves some searches unanswered, so each search asks three times.
 
 ## Troubleshooting
 
