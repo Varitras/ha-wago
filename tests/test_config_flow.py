@@ -20,10 +20,11 @@ from custom_components.wago_879.const import (
 from custom_components.wago_879.sensor import MODULE_MODEL
 from custom_components.wago_879.wago_879_api.discovery import FoundModule
 from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
+from homeassistant.components import network
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.selector import NumberSelector, SelectSelector, TextSelector
 
 from .test_module import module_holding
@@ -722,6 +723,10 @@ async def test_a_changed_setting_is_written_and_the_entry_reloaded(hass, meter):
     # The device page shows what was read at setup; one reload reads it anew.
     assert len(meter.params_seen) == connections_before + 1
     assert entry.state is ConfigEntryState.LOADED
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{MODULE.serial_number}_ntp_server_2"
+    )
+    assert hass.states.get(entity_id).state == "192.0.2.1"
 
 
 async def test_an_unchanged_page_writes_nothing(hass, meter):
@@ -888,3 +893,35 @@ async def test_switching_dhcp_off_keeps_an_entry_s_host_name(hass, meter):
 
     assert entry.data[CONF_HOST] == "wago-module"
     assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_a_found_module_whose_meter_is_no_wago_879_is_not_offered(hass, meter):
+    meter.load_raw({"holding": {0x4002: 0x9999}})
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "unsupported_meter"
+
+
+async def test_the_search_goes_to_every_broadcast_address_of_home_assistant(
+    hass, module_search
+):
+    """Which adapters count is the user's network setting in Home Assistant;
+    with only the default one enabled that is the limited broadcast alone."""
+    await _start(hass)
+
+    (targets,) = module_search.await_args.args
+    expected = await network.async_get_ipv4_broadcast_addresses(hass)
+    assert set(targets) == {str(address) for address in expected}
+    assert "255.255.255.255" in targets
+
+
+async def test_a_search_that_cannot_open_a_socket_leaves_the_host_to_type(
+    hass, module_search
+):
+    module_search.side_effect = OSError("no network")
+
+    started = await _start(hass)
+    fields = {str(key): value for key, value in started["data_schema"].schema.items()}
+
+    assert isinstance(fields[CONF_HOST], TextSelector)

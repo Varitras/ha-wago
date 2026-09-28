@@ -453,6 +453,16 @@ async def test_a_meter_without_the_module_still_loads(hass):
     )
 
 
+async def test_a_gateway_that_refuses_unit_255_still_loads_the_meter(hass, meter):
+    """Another gateway may answer unit 255 with an error instead of zeros."""
+    meter.fail_module_requests(ModbusConnectionError("no such unit"))
+
+    entry = await _setup(hass, _entry(hass))
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.module is None
+
+
 async def test_the_entry_follows_its_module_to_a_new_address(
     hass, meter, module_search
 ):

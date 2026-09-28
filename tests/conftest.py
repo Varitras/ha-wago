@@ -59,7 +59,8 @@ class SharedMockModbus:
     The hub closes the shared connection when the last entry lets go of it
     and builds a new one on the next load, so every call hands out a fresh
     in-memory connection - seeded with the same registers and failures, the
-    way the real meter is still the same meter after a reload.
+    way the real meter is still the same meter after a reload. What is
+    written to the module stays written, as it does in the module's flash.
     """
 
     def __init__(self) -> None:
@@ -67,6 +68,7 @@ class SharedMockModbus:
         self.connections: list[MockModbusConnection] = []
         self._raw: dict = {"holding": {}}
         self._module_raw: dict = {"holding": {}}
+        self._module_failure: Exception | None = None
         self._request_failure: Exception | None = None
         self._read_failures: list = []
 
@@ -78,7 +80,10 @@ class SharedMockModbus:
         unit.fail_requests(self._request_failure)
         for address, error in self._read_failures:
             unit.fail_read(address, error, register_type="holding")
-        connection.for_unit(MODULE_UNIT_ID).load_raw(self._module_raw)
+        module = connection.for_unit(MODULE_UNIT_ID)
+        module.load_raw(self._module_raw)
+        module.fail_requests(self._module_failure)
+        module.on_write(self._keep_module_write)
         self.connections.append(connection)
         return connection
 
@@ -103,6 +108,16 @@ class SharedMockModbus:
             self._module_raw[space].update(values)
         for connection in self.connections:
             connection.for_unit(MODULE_UNIT_ID).load_raw(raw)
+
+    def _keep_module_write(self, event) -> None:
+        for offset, value in enumerate(event.values):
+            self._module_raw["holding"][event.address + offset] = value
+
+    def fail_module_requests(self, error: Exception | None) -> None:
+        """Unit 255 fails every request: a gateway that is no 879-9000."""
+        self._module_failure = error
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).fail_requests(error)
 
     def fail_read_band(self, address: int) -> None:
         """The meter refuses the holding block starting at ``address``."""
