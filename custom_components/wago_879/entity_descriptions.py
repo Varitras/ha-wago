@@ -32,7 +32,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 
-from .wago_879_api.device import PARITIES, PORTS
+from .wago_879_api.device import MODULE_SWITCHES, PARITIES, PORTS
 from .wago_879_api.registers import ENERGY_FIELDS, IDENTITY_FIELDS, MEASUREMENT_FIELDS
 
 
@@ -279,5 +279,5 @@ MODULE_BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = t
     BinarySensorEntityDescription(
         key=field, translation_key=field, entity_category=EntityCategory.DIAGNOSTIC
     )
-    for field in ("dhcp", "ntp")
+    for field in MODULE_SWITCHES
 )

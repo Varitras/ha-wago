@@ -135,8 +135,36 @@
   {
     "label": "module page: the gateway must lie in the module's network",
     "path": "custom_components/wago_879/module_settings.py",
-    "old": "    if gateway_text != UNSET and (gateway not in network or gateway == host):\n",
-    "new": "    if gateway_text != UNSET and gateway == host:\n",
+    "old": "    if not usable or gateway not in network or gateway == host:\n",
+    "new": "    if not usable or gateway == host:\n",
     "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a host mask must not pass as a netmask",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    canonical = str(interface.netmask) == settings[\"netmask\"]\n",
+    "new": "    canonical = True\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a gateway may not be the network's edge",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    usable = is_host_address(gateway) and gateway not in edges\n",
+    "new": "    usable = True\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a value the module holds must not block another change",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if \"hostname\" in changed:\n",
+    "new": "    if True:\n",
+    "tests": "module_holds_does_not_block_another_change"
+  },
+  {
+    "label": "discovery: a reply without a host address must be dropped",
+    "path": "custom_components/wago_879/wago_879_api/discovery.py",
+    "old": "    if not serial.isalnum() or not is_host_address(host):\n",
+    "new": "    if not serial.isalnum():\n",
+    "tests": "anything_but_a_module_reply_is_ignored"
   }
 ]

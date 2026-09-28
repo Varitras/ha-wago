@@ -121,6 +121,11 @@ WORD_RANGE = 0x10000
 # What the tool writes to a command register to run the command.
 COMMAND_RUN = 1
 
+# Two groups of the keys async_read reports, for whoever treats them alike:
+# on/off switches, and servers the module talks to (0.0.0.0 when not set).
+MODULE_SWITCHES = ("dhcp", "ntp")
+MODULE_SERVERS = ("dns_server_1", "dns_server_2", "ntp_server_1", "ntp_server_2")
+
 # The settings a user may change, under the keys async_read reports them by.
 # Port, baud rate and parity stay out: the module's serial side is fixed to
 # the meter's 115200 baud, even parity.

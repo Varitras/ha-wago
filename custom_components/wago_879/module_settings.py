@@ -7,14 +7,20 @@ import math
 import re
 from typing import Any
 
+from .wago_879_api.addresses import is_host_address
+from .wago_879_api.device import MODULE_SERVERS, MODULE_SWITCHES
 from .wago_879_api.registers import HOSTNAME_WORDS
 
 # How the module stores a server or gateway that is not set; its tool
 # writes it for a field left empty.
 UNSET = "0.0.0.0"
-ADDRESS_FIELDS = ("ip_address", "gateway")
-SERVER_FIELDS = ("dns_server_1", "dns_server_2", "ntp_server_1", "ntp_server_2")
-SWITCH_FIELDS = ("dhcp", "ntp")
+# Addresses the form shows empty when they are not set.
+OPTIONAL_ADDRESSES = ("ip_address", "gateway", *MODULE_SERVERS)
+# What decides where the module sits in its network.
+NETWORK_FIELDS = frozenset({"dhcp", "ip_address", "netmask", "gateway"})
+# A netmask a host can live in: /31 and /32 leave no address besides the
+# network and broadcast addresses the fixed address may not take.
+PREFIX_RANGE = range(1, 31)
 # One label of a DNS name (RFC 1123). One byte short of the register block:
 # whether the firmware needs a terminating NUL is unknown, and a name that
 # fills the block would lose it.
@@ -40,13 +46,6 @@ def _address(text: Any) -> str:
         raise _Refused("invalid_address") from None
 
 
-def _hostname(text: Any) -> str:
-    hostname = str(text or "")
-    if len(hostname) > HOSTNAME_MAX_LENGTH or not HOSTNAME.fullmatch(hostname):
-        raise _Refused("invalid_hostname")
-    return hostname
-
-
 def _whole_number(value: Any) -> int:
     """A number selector hands over floats; the flow API takes any text."""
     try:
@@ -58,44 +57,82 @@ def _whole_number(value: Any) -> int:
     return int(number)
 
 
-def _check_network(interface: IPv4Interface, gateway_text: str) -> None:
-    """Refuse a fixed address that cannot work in its network."""
-    network = interface.network
-    host = interface.ip
-    if host in (network.network_address, network.broadcast_address):
+def _check_server(text: str) -> None:
+    if text != UNSET and not is_host_address(IPv4Address(text)):
         raise _Refused("invalid_address")
-    gateway = IPv4Address(gateway_text)
-    if gateway_text != UNSET and (gateway not in network or gateway == host):
-        raise _Refused("gateway_outside_network")
 
 
-def _settings(form: dict[str, Any]) -> dict[str, Any]:
-    settings: dict[str, Any] = {key: bool(form.get(key)) for key in SWITCH_FIELDS}
-    for key in (*ADDRESS_FIELDS, "netmask", *SERVER_FIELDS):
-        settings[key] = _address(form.get(key))
-    settings["hostname"] = _hostname(form.get("hostname"))
-    settings["timeout"] = _whole_number(form.get("timeout"))
-    # Checked with DHCP on too: the fixed settings are written either way and
-    # take effect the moment DHCP is switched off.
+def _check_hostname(hostname: str) -> None:
+    if len(hostname) > HOSTNAME_MAX_LENGTH or not HOSTNAME.fullmatch(hostname):
+        raise _Refused("invalid_hostname")
+
+
+def _interface(settings: dict[str, Any]) -> IPv4Interface:
+    """The fixed address in its network, with the netmask exactly as typed.
+
+    `IPv4Interface` also reads a host mask - 0.0.0.255 as /24 - but the
+    module would get the words as typed, so only the canonical form passes.
+    """
     try:
         interface = IPv4Interface(f"{settings['ip_address']}/{settings['netmask']}")
     except NetmaskValueError:
         raise _Refused("invalid_netmask") from None
-    if settings["dhcp"]:
-        return settings
-    if settings["ip_address"] == UNSET:
+    canonical = str(interface.netmask) == settings["netmask"]
+    if not canonical or interface.network.prefixlen not in PREFIX_RANGE:
+        raise _Refused("invalid_netmask")
+    return interface
+
+
+def _check_network(settings: dict[str, Any]) -> None:
+    """Refuse a fixed address or gateway that cannot work in its network."""
+    interface = _interface(settings)
+    network = interface.network
+    edges = (network.network_address, network.broadcast_address)
+    host = interface.ip
+    if not is_host_address(host) or host in edges:
         raise _Refused("invalid_address")
-    _check_network(interface, settings["gateway"])
+    if settings["gateway"] == UNSET:
+        return
+    gateway = IPv4Address(settings["gateway"])
+    usable = is_host_address(gateway) and gateway not in edges
+    if not usable or gateway not in network or gateway == host:
+        raise _Refused("gateway_outside_network")
+
+
+def _settings(form: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    settings: dict[str, Any] = {key: bool(form.get(key)) for key in MODULE_SWITCHES}
+    for key in (*OPTIONAL_ADDRESSES, "netmask"):
+        settings[key] = _address(form.get(key))
+    settings["hostname"] = str(form.get("hostname") or "")
+    settings["timeout"] = _whole_number(form.get("timeout"))
+    # Only what the user changed meets the strict rules: a value the module
+    # already holds - a factory 0.0.0.0, a name another tool set - must not
+    # stop an unrelated change.
+    changed = {key for key, value in settings.items() if current.get(key) != value}
+    for key in changed.intersection(MODULE_SERVERS):
+        _check_server(settings[key])
+    if "hostname" in changed:
+        _check_hostname(settings["hostname"])
+    if "ip_address" in changed and settings["ip_address"] != UNSET:
+        _check_server(settings["ip_address"])
+    # Checked with DHCP on too: the fixed settings are written either way and
+    # take effect the moment DHCP is switched off.
+    if "netmask" in changed:
+        _interface({**settings, "ip_address": UNSET})
+    if changed & NETWORK_FIELDS and not settings["dhcp"]:
+        _check_network(settings)
     return settings
 
 
-def module_settings(form: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+def module_settings(
+    form: dict[str, Any], current: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str | None]:
     """The settings to write, or the form error that stops them.
 
-    Keyed and typed as the module reports them, so a change can be told
-    from none.
+    Keyed and typed as the module reports them - `current` is its last read
+    - so a change can be told from none.
     """
     try:
-        return _settings(form), None
+        return _settings(form, current), None
     except _Refused as refused:
         return None, refused.error

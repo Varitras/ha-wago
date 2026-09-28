@@ -41,8 +41,22 @@ def test_a_reply_names_the_module_and_its_address():
         REPLY + b"\0",
         REPLY[:20] + b"\xff" * 12,
         REPLY[:20] + b"03300000000\0",
+        # A module without a lease yet, or on its link-local fallback, names
+        # an address no entry can be moved to.
+        REPLY[:12] + bytes(4) + REPLY[16:],
+        REPLY[:12] + bytes([169, 254, 0, 4]) + REPLY[16:],
+        REPLY[:12] + bytes([255, 255, 255, 255]) + REPLY[16:],
     ],
-    ids=["request", "short", "long", "not text", "not a serial"],
+    ids=[
+        "request",
+        "short",
+        "long",
+        "not text",
+        "not a serial",
+        "unset address",
+        "link-local address",
+        "broadcast address",
+    ],
 )
 def test_anything_but_a_module_reply_is_ignored(datagram):
     assert parse_reply(datagram) is None

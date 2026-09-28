@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import CONF_HOST
 from .coordinator import WagoConfigEntry, WagoCoordinator
+from .wago_879_api.device import MODULE_SERVERS
 
 # The module's settings name the network it sits in; its serial identifies it.
 TO_REDACT = {
@@ -23,11 +24,8 @@ TO_REDACT = {
     "unique_id",
     "ip_address",
     "gateway",
-    "dns_server_1",
-    "dns_server_2",
-    "ntp_server_1",
-    "ntp_server_2",
     "hostname",
+    *MODULE_SERVERS,
 }
 
 

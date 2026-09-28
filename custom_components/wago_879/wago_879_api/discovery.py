@@ -12,6 +12,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 
+from .addresses import is_host_address
+
 BROWSE_PORT = 20000
 BROWSE_REQUEST = b"\xff" * 7
 REPLY_LENGTH = 32
@@ -41,9 +43,10 @@ def parse_reply(data: bytes) -> FoundModule | None:
         serial = data[REPLY_SERIAL].decode("ascii")
     except UnicodeDecodeError:
         return None
-    if not serial.isalnum():
+    host = IPv4Address(data[REPLY_ADDRESS])
+    if not serial.isalnum() or not is_host_address(host):
         return None
-    return FoundModule(serial_number=serial, host=str(IPv4Address(data[REPLY_ADDRESS])))
+    return FoundModule(serial_number=serial, host=str(host))
 
 
 class _Replies(asyncio.DatagramProtocol):

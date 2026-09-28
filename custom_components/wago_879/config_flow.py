@@ -45,7 +45,7 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .discovery import async_find_modules
-from .module_settings import ADDRESS_FIELDS, SERVER_FIELDS, UNSET, module_settings
+from .module_settings import OPTIONAL_ADDRESSES, UNSET, module_settings
 from .sensor import device_name, entry_title
 from .wago_879_api.device import WORD_RANGE, UnsupportedMeter, WagoMeter, WagoModule
 from .wago_879_api.discovery import FoundModule
@@ -407,7 +407,8 @@ def _module_schema() -> vol.Schema:
     return vol.Schema(
         {
             vol.Required("dhcp"): BooleanSelector(),
-            vol.Required("ip_address"): address,
+            # Optional: a module on DHCP from the factory has none.
+            vol.Optional("ip_address"): address,
             vol.Required("netmask"): address,
             vol.Optional("gateway"): address,
             vol.Optional("dns_server_1"): address,
@@ -432,7 +433,7 @@ def _module_schema() -> vol.Schema:
 def _module_form(values: dict[str, Any]) -> dict[str, Any]:
     """The module's values as the form shows them: an unset address is empty."""
     form = {str(key): values[str(key)] for key in _module_schema().schema}
-    for key in (*ADDRESS_FIELDS, *SERVER_FIELDS):
+    for key in OPTIONAL_ADDRESSES:
         if form[key] == UNSET:
             form[key] = ""
     return form
@@ -498,7 +499,7 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
         current = self._module_values
         errors: dict[str, str] = {}
         if user_input is not None:
-            settings, error = module_settings(user_input)
+            settings, error = module_settings(user_input, current)
             if error is not None:
                 errors["base"] = error
             else:
