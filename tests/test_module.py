@@ -115,8 +115,8 @@ async def test_another_gateway_on_unit_255_is_not_taken_for_the_module(unit):
     assert await WagoModule(unit).async_read() is None
 
 
-FC_WRITE_SINGLE = 0x06
-FC_WRITE_MULTIPLE = 0x10
+WRITE_SINGLE_REGISTER = 0x06
+WRITE_MULTIPLE_REGISTERS = 0x10
 
 
 async def test_a_change_is_written_stored_and_applied_as_the_tool_does(unit):
@@ -130,10 +130,10 @@ async def test_a_change_is_written_stored_and_applied_as_the_tool_does(unit):
     )
 
     assert [(write.address, write.function_code) for write in writes] == [
-        (0x0000, FC_WRITE_MULTIPLE),
-        (0x0064, FC_WRITE_MULTIPLE),
-        (0x03F2, FC_WRITE_SINGLE),
-        (0x03F1, FC_WRITE_SINGLE),
+        (0x0000, WRITE_MULTIPLE_REGISTERS),
+        (0x0064, WRITE_MULTIPLE_REGISTERS),
+        (0x03F2, WRITE_SINGLE_REGISTER),
+        (0x03F1, WRITE_SINGLE_REGISTER),
     ]
     # Word 4 means nothing the tool shows; it goes back as it was read.
     assert writes[0].values == [10, 1, 1, 2000, 1]

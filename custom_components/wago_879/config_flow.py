@@ -68,8 +68,6 @@ SECONDS = "s"
 MILLISECONDS = "ms"
 # A register word's range; the module's own limits are not known.
 MODULE_TIMEOUT_MAX = WORD_RANGE - 1
-# Shown on the module page, not offered: the serial side is fixed to the meter.
-MODULE_FIXED_FIELDS = ("modbus_port", "baud_rate", "parity")
 NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 # Named tuple, not an inline literal in the `except` clause: at this project's
 # `target-version = "py314"` the formatter drops the parentheses (PEP 758
@@ -305,7 +303,7 @@ def async_move_entry(
 
 
 class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Host, port, unit id and the two intervals."""
+    """Adding a meter by hand or from the search, and moving it."""
 
     VERSION = 1
     MINOR_VERSION = INTERVALS_IN_OPTIONS_MINOR_VERSION
@@ -502,10 +500,6 @@ def _module_form(values: dict[str, Any]) -> dict[str, Any]:
     return form
 
 
-def _fixed_fields(values: dict[str, Any]) -> dict[str, str]:
-    return {key: str(values[key] or "-") for key in MODULE_FIXED_FIELDS}
-
-
 class WagoOptionsFlow(config_entries.OptionsFlow):
     """The poll intervals, and the 879-9000's own settings when it answers."""
 
@@ -577,7 +571,6 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
             data_schema=self.add_suggested_values_to_schema(
                 _module_schema(), user_input or _module_form(current)
             ),
-            description_placeholders=_fixed_fields(current),
             errors=errors,
         )
 
@@ -604,7 +597,6 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
                 data_schema=self.add_suggested_values_to_schema(
                     _module_schema(), _module_form(settings)
                 ),
-                description_placeholders=_fixed_fields(current),
                 errors={"base": "module_write_failed"},
             )
         except ModuleNotApplied as err:

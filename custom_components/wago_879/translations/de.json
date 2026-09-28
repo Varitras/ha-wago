@@ -73,7 +73,7 @@
       },
       "module": {
         "title": "Moduleinstellungen",
-        "description": "Einstellungen des Moduls 879-9000, gerade eben aus ihm gelesen. Speichern schreibt die Änderungen ins Modul, legt sie dort ab und lässt das Modul sie übernehmen. Die serielle Seite bleibt fest auf den Zähler eingestellt: {modbus_port}, {baud_rate} Baud, Parität {parity}.\n\nEine neue Adresse oder DHCP verlegt das Modul weg von seiner alten Adresse. Bei fester Adresse zieht der Eintrag mit; bei DHCP findet die Suche das Modul wieder, solange es in einem Subnetz von Home Assistant liegt.",
+        "description": "Einstellungen des Moduls 879-9000, gerade eben aus ihm gelesen. Speichern schreibt die Änderungen ins Modul, legt sie dort ab und lässt das Modul sie übernehmen. Die serielle Seite bleibt fest auf den Zähler eingestellt und steht auf der Geräteseite des Moduls.\n\nEine neue Adresse oder DHCP verlegt das Modul weg von seiner alten Adresse. Bei fester Adresse zieht der Eintrag mit; bei DHCP findet die Suche das Modul wieder, solange es auf die Suche antwortet.",
         "data": {
           "dhcp": "DHCP",
           "ip_address": "IP-Adresse",
@@ -97,7 +97,7 @@
           "ntp": "Die Uhr des Moduls von einem Zeitserver stellen.",
           "ntp_server_1": "Adresse eines Zeitservers; leer für keinen.",
           "ntp_server_2": "Adresse eines zweiten Zeitservers; leer für keinen.",
-          "hostname": "Name, mit dem sich das Modul beim DHCP-Server meldet: Buchstaben, Ziffern und Bindestriche.",
+          "hostname": "Name, mit dem sich das Modul beim DHCP-Server meldet: Buchstaben, Ziffern und Bindestriche, höchstens 31 Zeichen.",
           "timeout": "Wie lange das Modul auf die Antwort des Zählers wartet."
         }
       }
@@ -106,7 +106,7 @@
       "not_a_whole_number": "Bitte eine ganze Zahl eingeben",
       "invalid_address": "Eine IPv4-Adresse wie 192.168.1.10 eingeben",
       "invalid_netmask": "Eine Netzmaske wie 255.255.255.0 eingeben",
-      "invalid_hostname": "Ein Hostname besteht nur aus Buchstaben, Ziffern und Bindestrichen und beginnt und endet nicht mit einem Bindestrich",
+      "invalid_hostname": "Ein Hostname hat höchstens 31 Buchstaben, Ziffern und Bindestriche und beginnt und endet nicht mit einem Bindestrich",
       "gateway_outside_network": "Das Gateway muss eine andere Adresse im Netz des Moduls sein",
       "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet."
     },

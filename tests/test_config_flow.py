@@ -697,12 +697,6 @@ async def test_the_module_page_shows_what_the_module_holds_now(hass, meter):
         for key in result["data_schema"].schema
     }
     assert defaults == MODULE_FORM
-    # The serial side is fixed to the meter; shown, not offered.
-    assert result["description_placeholders"] == {
-        "modbus_port": "rs232",
-        "baud_rate": "115200",
-        "parity": "even",
-    }
 
 
 async def test_a_changed_setting_is_written_and_the_entry_reloaded(hass, meter):

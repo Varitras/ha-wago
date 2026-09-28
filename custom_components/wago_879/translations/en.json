@@ -73,7 +73,7 @@
       },
       "module": {
         "title": "Module settings",
-        "description": "Settings of the 879-9000 module, read from it just now. Saving writes the changes to the module, stores them there and makes the module use them. The serial side stays fixed to the meter: {modbus_port}, {baud_rate} baud, parity {parity}.\n\nA new address or DHCP moves the module away from its old address. With a fixed address the entry follows it; with DHCP the search finds it again as long as it is in one of Home Assistant's subnets.",
+        "description": "Settings of the 879-9000 module, read from it just now. Saving writes the changes to the module, stores them there and makes the module use them. The serial side stays fixed to the meter and is shown on the module's device page.\n\nA new address or DHCP moves the module away from its old address. With a fixed address the entry follows it; with DHCP the search finds it again as long as it answers the search.",
         "data": {
           "dhcp": "DHCP",
           "ip_address": "IP address",
@@ -97,7 +97,7 @@
           "ntp": "Set the module's clock from a time server.",
           "ntp_server_1": "Address of a time server; empty for none.",
           "ntp_server_2": "Address of a second time server; empty for none.",
-          "hostname": "Name the module gives a DHCP server: letters, digits and hyphens.",
+          "hostname": "Name the module gives a DHCP server: letters, digits and hyphens, at most 31 characters.",
           "timeout": "How long the module waits for the meter's answer."
         }
       }
@@ -106,7 +106,7 @@
       "not_a_whole_number": "Enter a whole number",
       "invalid_address": "Enter an IPv4 address such as 192.168.1.10",
       "invalid_netmask": "Enter a netmask such as 255.255.255.0",
-      "invalid_hostname": "A host name has letters, digits and hyphens only, and neither starts nor ends with a hyphen",
+      "invalid_hostname": "A host name has at most 31 letters, digits and hyphens, and neither starts nor ends with a hyphen",
       "gateway_outside_network": "The gateway has to be another address in the module's network",
       "module_write_failed": "The module did not accept the settings. If its address changed, the entry follows it once the search finds the module."
     },

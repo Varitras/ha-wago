@@ -119,8 +119,7 @@ class WagoRuntimeData:
     identity: dict[str, Any]
     measurements: WagoCoordinator
     energy: WagoCoordinator
-    # The 879-9000's own settings as setup read them, its registered device
-    # and the handle that reads and writes it; None behind any other gateway.
+    # None behind any gateway other than the 879-9000.
     module: dict[str, Any] | None = None
     module_device_id: str | None = None
     module_api: WagoModule | None = None

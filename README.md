@@ -128,18 +128,23 @@ phase voltages, set to *arithmetic mean*.
 
 ## Discovery
 
-The integration searches Home Assistant's own subnets for 879-9000 modules
-the way WAGO's configuration tool does (a UDP broadcast to port 20000):
+The integration searches for 879-9000 modules the way WAGO's
+configuration tool does: a UDP broadcast to port 20000, sent to the
+broadcast addresses of the network adapters enabled under **Settings ->
+System -> Network** (with only the default adapter, that is
+255.255.255.255).
 
 - **When adding the integration**, the host field lists the modules found;
   an address can still be typed.
-- **In the background**, once at start and every 15 minutes while an entry
-  of this integration exists:
+- **In the background**, from the start of Home Assistant - once the
+  integration is loaded, which takes an enabled entry - every 15 minutes
+  until Home Assistant stops:
   - a module with a meter that is not set up yet appears under **Discovered**
-    (only a meter on port 502 and unit id 1; any other is added by hand);
-  - a module that turned up at a new address takes its entry along - the
-    entry's host is updated and the entry reloaded. An entry set up with a
-    host name keeps it.
+    (only a meter on port 502 and unit id 1; any other is added by hand).
+    Each module's meter is asked once per run of Home Assistant;
+  - a module that turned up at a new address takes its entry along, once it
+    answers there with its own serial number - the entry's host is updated
+    and the entry reloaded. An entry set up with a host name keeps it.
 
 ## Module settings
 
@@ -150,10 +155,15 @@ timeout. The page reads the module when it opens, and saving writes only
 when something changed - both setting blocks, then "store" and "apply".
 An empty server field means "not set".
 
-- The serial side (RS232, 115200 baud, even parity) is fixed to the meter
-  and only shown.
-- A new fixed address takes the entry along; with DHCP the search finds the
-  module again, as long as it stays in one of Home Assistant's subnets.
+- The strict checks apply to what was changed: a value the module already
+  holds, set by another tool, does not block saving something else.
+- The serial side (RS232, 115200 baud, even parity) is fixed to the meter;
+  it is shown on the module's device page, not offered here.
+- A new fixed address, or switching DHCP off, takes the entry along; with
+  DHCP the search finds the module again, as long as it answers the search.
+- When the module stores the settings but does not confirm using them, the
+  page says so; it uses them after its next restart at the latest.
+- Two pages saved at once are written one after the other.
 - The page appears only when the module answered at setup.
 
 ## Migrating from a YAML `modbus:` block
@@ -256,6 +266,12 @@ meter whose link is down is logged at *info*, not as an error.
 - **"answers as serial ..., but this entry belongs to serial ..."** - a
   different meter answers at the saved address. Use **Reconfigure** to point
   the entry at the right address, or add the other meter as its own entry.
+- **A module is not listed** when adding the integration, or never
+  appears under Discovered - the search only reaches the subnets of the
+  adapters enabled under **Settings -> System -> Network**, and routers do
+  not pass it on. Home Assistant in a container needs host networking, and
+  a firewall on its host has to let in UDP replies from port 20000. Adding
+  the module by its address works regardless.
 - **More detail** - enable debug logging for the integration:
 
   ```yaml
