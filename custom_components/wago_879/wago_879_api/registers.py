@@ -188,6 +188,15 @@ HOSTNAME_WORDS = 16
 SERIAL_WORDS = 3
 # What the module reports as its device type: inepro's article number 0330.
 MODULE_DEVICE_TYPE = 330
+# The two blocks the configuration tool writes whole, and the two commands it
+# sends after them (captured): "store" keeps the blocks over a restart,
+# "apply" makes the module use them.
+MODULE_SETTINGS_ADDRESS = 0x0000
+MODULE_SETTINGS_WORDS = 5
+MODULE_NETWORK_ADDRESS = 0x0064
+MODULE_NETWORK_WORDS = 32
+MODULE_STORE_COMMAND = 0x03F2
+MODULE_APPLY_COMMAND = 0x03F1
 
 
 class ModuleSettings(Component):

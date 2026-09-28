@@ -186,7 +186,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     await measurements.async_config_entry_first_refresh()
     await energy.async_config_entry_first_refresh()
 
-    module = await _async_read_module(hass, entry, params)
+    module_api = WagoModule(async_get_unit(hass, entry, params, MODULE_UNIT_ID))
+    module = await _async_read_module(module_api, host)
     entry.runtime_data = WagoRuntimeData(
         serial=serial,
         identity=identity,
@@ -194,6 +195,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
         energy=energy,
         module=module,
         module_device_id=_register_module(hass, entry, module),
+        module_api=None if module is None else module_api,
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -201,18 +203,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
 
 
 async def _async_read_module(
-    hass: HomeAssistant, entry: WagoConfigEntry, params: ModbusTcpParams
+    module_api: WagoModule, host: str
 ) -> dict[str, Any] | None:
     """The 879-9000's own settings, or None: the meter works without them."""
     try:
-        return await WagoModule(
-            async_get_unit(hass, entry, params, MODULE_UNIT_ID)
-        ).async_read()
+        return await module_api.async_read()
     except ModbusError as err:
         _LOGGER.debug(
             "No 879-9000 settings on unit %s: %s",
             MODULE_UNIT_ID,
-            redact(str(err), params.host),
+            redact(str(err), host),
         )
         return None
 

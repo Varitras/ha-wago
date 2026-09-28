@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -44,14 +45,20 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .discovery import async_find_modules
+from .module_settings import ADDRESS_FIELDS, SERVER_FIELDS, UNSET, module_settings
 from .sensor import device_name, entry_title
-from .wago_879_api.device import UnsupportedMeter, WagoMeter
+from .wago_879_api.device import WORD_RANGE, UnsupportedMeter, WagoMeter, WagoModule
 from .wago_879_api.discovery import FoundModule
 
 PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
 UNIT_ID_MAX = 247
 SECONDS = "s"
+MILLISECONDS = "ms"
+# A register word's range; the module's own limits are not known.
+MODULE_TIMEOUT_MAX = WORD_RANGE - 1
+# Shown on the module page, not offered: the serial side is fixed to the meter.
+MODULE_FIXED_FIELDS = ("modbus_port", "baud_rate", "parity")
 NOT_A_WHOLE_NUMBER = "not_a_whole_number"
 # Named tuple, not an inline literal in the `except` clause: at this project's
 # `target-version = "py314"` the formatter drops the parentheses (PEP 758
@@ -395,13 +402,70 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+def _module_schema() -> vol.Schema:
+    address = TextSelector()
+    return vol.Schema(
+        {
+            vol.Required("dhcp"): BooleanSelector(),
+            vol.Required("ip_address"): address,
+            vol.Required("netmask"): address,
+            vol.Optional("gateway"): address,
+            vol.Optional("dns_server_1"): address,
+            vol.Optional("dns_server_2"): address,
+            vol.Required("ntp"): BooleanSelector(),
+            vol.Optional("ntp_server_1"): address,
+            vol.Optional("ntp_server_2"): address,
+            vol.Required("hostname"): TextSelector(),
+            vol.Required("timeout"): NumberSelector(
+                NumberSelectorConfig(
+                    min=1,
+                    max=MODULE_TIMEOUT_MAX,
+                    step=1,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement=MILLISECONDS,
+                )
+            ),
+        }
+    )
+
+
+def _module_form(values: dict[str, Any]) -> dict[str, Any]:
+    """The module's values as the form shows them: an unset address is empty."""
+    form = {str(key): values[str(key)] for key in _module_schema().schema}
+    for key in (*ADDRESS_FIELDS, *SERVER_FIELDS):
+        if form[key] == UNSET:
+            form[key] = ""
+    return form
+
+
 class WagoOptionsFlow(config_entries.OptionsFlow):
-    """The two poll intervals; the entry reloads on change."""
+    """The poll intervals, and the 879-9000's own settings when it answers."""
+
+    def __init__(self) -> None:
+        """The module is read when its page is opened."""
+        self._module_values: dict[str, Any] | None = None
+
+    def _module_api(self) -> WagoModule | None:
+        entry = self.config_entry
+        if entry.state is not config_entries.ConfigEntryState.LOADED:
+            return None
+        module_api: WagoModule | None = entry.runtime_data.module_api
+        return module_api
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """The one options page."""
+        """A menu when the module can be configured, else the intervals."""
+        if self._module_api() is None:
+            return await self.async_step_intervals()
+        return self.async_show_menu(
+            step_id="init", menu_options=["intervals", "module"]
+        )
+
+    async def async_step_intervals(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """The two poll intervals; the entry reloads on change."""
         errors: dict[str, str] = {}
         if user_input is not None:
             whole = _as_integers(user_input)
@@ -410,7 +474,72 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
             errors["base"] = NOT_A_WHOLE_NUMBER
         current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
-            step_id="init",
+            step_id="intervals",
             data_schema=vol.Schema(_interval_schema(current)),
             errors=errors,
         )
+
+    async def async_step_module(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """The module's own settings, written the way its tool writes them."""
+        module_api = self._module_api()
+        if module_api is None:
+            return self.async_abort(reason="module_not_answering")
+        if self._module_values is None:
+            # Read now, not taken from setup: another tool may have changed
+            # the module since, and the page must not write that back.
+            try:
+                self._module_values = await module_api.async_read()
+            except ModbusError:
+                return self.async_abort(reason="module_not_answering")
+            if self._module_values is None:
+                return self.async_abort(reason="module_not_answering")
+        current = self._module_values
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            settings, error = module_settings(user_input)
+            if error is not None:
+                errors["base"] = error
+            else:
+                assert settings is not None
+                if await self._async_write(module_api, current, settings):
+                    return self.async_create_entry(data=dict(self.config_entry.options))
+                errors["base"] = "module_write_failed"
+        return self.async_show_form(
+            step_id="module",
+            data_schema=self.add_suggested_values_to_schema(
+                _module_schema(), user_input or _module_form(current)
+            ),
+            description_placeholders={
+                key: str(current[key] or "-") for key in MODULE_FIXED_FIELDS
+            },
+            errors=errors,
+        )
+
+    async def _async_write(
+        self,
+        module_api: WagoModule,
+        current: dict[str, Any],
+        settings: dict[str, Any],
+    ) -> bool:
+        """Write what changed and let the entry follow; False when refused."""
+        changes = {
+            key: value for key, value in settings.items() if current[key] != value
+        }
+        # Every write goes to the module's flash.
+        if not changes:
+            return True
+        try:
+            await module_api.async_write(changes)
+        except ModbusError:
+            return False
+        entry = self.config_entry
+        new_address = settings["ip_address"]
+        reached_by_address = entry.data[CONF_HOST] == current["ip_address"]
+        if "ip_address" in changes and reached_by_address and not settings["dhcp"]:
+            async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: new_address})
+            return True
+        # The device page shows what setup read.
+        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return True

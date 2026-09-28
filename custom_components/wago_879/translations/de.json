@@ -55,7 +55,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "intervals": {
         "data": {
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
@@ -64,10 +64,54 @@
           "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
           "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
+      },
+      "init": {
+        "menu_options": {
+          "intervals": "Abfrageintervalle",
+          "module": "Moduleinstellungen"
+        }
+      },
+      "module": {
+        "title": "Moduleinstellungen",
+        "description": "Einstellungen des Moduls 879-9000, gerade eben aus ihm gelesen. Speichern schreibt die Änderungen ins Modul, legt sie dort ab und lässt das Modul sie übernehmen. Die serielle Seite bleibt fest auf den Zähler eingestellt: {modbus_port}, {baud_rate} Baud, Parität {parity}.\n\nEine neue Adresse oder DHCP verlegt das Modul weg von seiner alten Adresse. Bei fester Adresse zieht der Eintrag mit; bei DHCP findet die Suche das Modul wieder, solange es in einem Subnetz von Home Assistant liegt.",
+        "data": {
+          "dhcp": "DHCP",
+          "ip_address": "IP-Adresse",
+          "netmask": "Netzmaske",
+          "gateway": "Gateway",
+          "dns_server_1": "DNS-Server 1",
+          "dns_server_2": "DNS-Server 2",
+          "ntp": "Zeitsynchronisation (NTP)",
+          "ntp_server_1": "NTP-Server 1",
+          "ntp_server_2": "NTP-Server 2",
+          "hostname": "Hostname",
+          "timeout": "Modbus-Timeout"
+        },
+        "data_description": {
+          "dhcp": "Adresse von einem DHCP-Server beziehen statt der festen unten.",
+          "ip_address": "Feste Adresse des Moduls. Bleibt für den Fall erhalten, dass DHCP aus ist.",
+          "netmask": "Netzmaske der festen Adresse, zum Beispiel 255.255.255.0.",
+          "gateway": "Router in andere Netze; leer für keinen. Muss im Netz des Moduls liegen.",
+          "dns_server_1": "Leer für keinen.",
+          "dns_server_2": "Leer für keinen.",
+          "ntp": "Die Uhr des Moduls von einem Zeitserver stellen.",
+          "ntp_server_1": "Adresse eines Zeitservers; leer für keinen.",
+          "ntp_server_2": "Adresse eines zweiten Zeitservers; leer für keinen.",
+          "hostname": "Name, mit dem sich das Modul beim DHCP-Server meldet: Buchstaben, Ziffern und Bindestriche.",
+          "timeout": "Wie lange das Modul auf die Antwort des Zählers wartet."
+        }
       }
     },
     "error": {
-      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben",
+      "invalid_address": "Eine IPv4-Adresse wie 192.168.1.10 eingeben",
+      "invalid_netmask": "Eine Netzmaske wie 255.255.255.0 eingeben",
+      "invalid_hostname": "Ein Hostname besteht nur aus Buchstaben, Ziffern und Bindestrichen und beginnt und endet nicht mit einem Bindestrich",
+      "gateway_outside_network": "Das Gateway muss eine andere Adresse im Netz des Moduls sein",
+      "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet."
+    },
+    "abort": {
+      "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden"
     }
   },
   "entity": {

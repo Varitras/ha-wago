@@ -111,3 +111,55 @@ async def test_another_gateway_on_unit_255_is_not_taken_for_the_module(unit):
     unit.load_raw({"holding": {0x0400: 0}})
 
     assert await WagoModule(unit).async_read() is None
+
+
+FC_WRITE_SINGLE = 0x06
+FC_WRITE_MULTIPLE = 0x10
+
+
+async def test_a_change_is_written_stored_and_applied_as_the_tool_does(unit):
+    """The order and shape the vendor tool used in the capture: both blocks
+    whole, then "store", then "apply"."""
+    writes = []
+    unit.on_write(writes.append)
+
+    await WagoModule(unit).async_write(
+        {"ntp_server_2": "192.0.2.1", "hostname": "meter-room", "timeout": 2000}
+    )
+
+    assert [(write.address, write.function_code) for write in writes] == [
+        (0x0000, FC_WRITE_MULTIPLE),
+        (0x0064, FC_WRITE_MULTIPLE),
+        (0x03F2, FC_WRITE_SINGLE),
+        (0x03F1, FC_WRITE_SINGLE),
+    ]
+    # Word 4 means nothing the tool shows; it goes back as it was read.
+    assert writes[0].values == [10, 1, 1, 2000, 1]
+    assert writes[2].values == writes[3].values == [1]
+    values = await WagoModule(unit).async_read()
+    assert values["ntp_server_2"] == "192.0.2.1"
+    assert values["hostname"] == "meter-room"
+    assert values["timeout"] == 2000
+    assert values["ip_address"] == "192.0.2.4"
+    assert values["ntp"] is True
+
+
+async def test_a_switch_is_written_as_a_word(unit):
+    await WagoModule(unit).async_write({"dhcp": True, "ntp": False})
+
+    values = await WagoModule(unit).async_read()
+    assert values["dhcp"] is True
+    assert values["ntp"] is False
+
+
+async def test_a_failed_write_is_not_stored(unit):
+    """A block the module refused must not be followed by "store": that would
+    keep the other block's half of a change."""
+    writes = []
+    unit.on_write(writes.append)
+    unit.fail_write(0x0064, ModbusConnectionError("down"))
+
+    with pytest.raises(ModbusConnectionError):
+        await WagoModule(unit).async_write({"hostname": "meter-room"})
+
+    assert 0x03F2 not in [write.address for write in writes]

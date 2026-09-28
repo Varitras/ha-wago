@@ -20,6 +20,12 @@ interval; the identity group is read once, when the entry is set up.
 - **Identity** - serial number, meter code, firmware/hardware version, Modbus
   unit id, CT ratio (when the meter reports one), rated current, and a few
   operational counters.
+- **Module** - the 879-9000's own settings, read at setup from its Modbus
+  unit 255: serial number, firmware and bootloader version, DHCP, address,
+  netmask, gateway, DNS and NTP servers, host name, serial port, baud rate,
+  parity and timeout. The module is a device of its own, the meter is linked
+  to it, and every value is a diagnostic entity. Behind another gateway
+  nothing of this appears.
 
 ### Entity visibility
 
@@ -135,6 +141,21 @@ the way WAGO's configuration tool does (a UDP broadcast to port 20000):
     entry's host is updated and the entry reloaded. An entry set up with a
     host name keeps it.
 
+## Module settings
+
+**Configure -> Module settings** changes the 879-9000's network and Modbus
+settings the way WAGO's configuration tool does: DHCP, address, netmask,
+gateway, DNS and NTP servers, NTP on or off, host name and the Modbus
+timeout. The page reads the module when it opens, and saving writes only
+when something changed - both setting blocks, then "store" and "apply".
+An empty server field means "not set".
+
+- The serial side (RS232, 115200 baud, even parity) is fixed to the meter
+  and only shown.
+- A new fixed address takes the entry along; with DHCP the search finds the
+  module again, as long as it stays in one of Home Assistant's subnets.
+- The page appears only when the module answered at setup.
+
 ## Migrating from a YAML `modbus:` block
 
 If the meter was previously set up through a YAML `modbus:` block (the usual
@@ -190,7 +211,8 @@ and has no interval:
   power, ...); default 15 seconds.
 - **Energy interval** - the energy counters; default 300 seconds.
 
-Both can be changed from the integration's options, within 5-3600 seconds.
+Both can be changed under **Configure -> Poll intervals**, within 5-3600
+seconds.
 
 A poll that fails keeps the last values; only the fourth failed poll in a row
 marks the entities unavailable, and the next good poll brings them back. A
@@ -198,9 +220,12 @@ meter whose link is down is logged at *info*, not as an error.
 
 ## Known limitations
 
-- **Read-only.** The integration never writes to the meter: switching the
-  tariff, resetting the day counters or changing Modbus settings is not
-  possible from Home Assistant.
+- **The meter is read-only.** Switching the tariff, resetting the day
+  counters or changing the meter's Modbus settings is not possible from Home
+  Assistant; only the 879-9000 module's own settings can be written.
+- **Module settings were checked against one module**, firmware 1.0.856.
+  How long the module takes to use a new address is not known; a write it
+  does not confirm is reported, and the search follows a module that moved.
 - **Only the 4PU variant is tested** (see [Supported devices](#supported-devices)).
 - **CT ratio** is shown as the two raw words the meter sends. The manual
   prints its example in a way that leaves open whether they are decimal or

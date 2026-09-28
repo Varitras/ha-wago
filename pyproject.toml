@@ -245,6 +245,7 @@ files = [
   "custom_components/wago_879/diagnostics.py",
   "custom_components/wago_879/binary_sensor.py",
   "custom_components/wago_879/discovery.py",
+  "custom_components/wago_879/module_settings.py",
   "custom_components/wago_879/wago_879_api/discovery.py",
 ]
 

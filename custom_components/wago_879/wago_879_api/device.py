@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from ipaddress import IPv4Address
 import math
 from typing import Any
 
 from modbus_connection import ModbusUnit
+from modbus_connection.encode import encode_string
 from modbus_connection.model import Component
+from modbus_connection.model.fields import IPv4Field, RegisterField, StringField
 
 from .registers import (
     ENERGY_FIELDS,
     IDENTITY_FIELDS,
     MEASUREMENT_FIELDS,
+    MODULE_APPLY_COMMAND,
     MODULE_DEVICE_TYPE,
+    MODULE_NETWORK_ADDRESS,
+    MODULE_NETWORK_WORDS,
+    MODULE_SETTINGS_ADDRESS,
+    MODULE_SETTINGS_WORDS,
+    MODULE_STORE_COMMAND,
     SERIAL_WORDS,
     Energy,
     Identity,
@@ -107,6 +117,34 @@ PARITIES = {1: "even", 2: "none", 3: "odd"}
 # Only the code the tool was seen to show; RS-485's code is unknown.
 PORTS = {1: "rs232"}
 HEX_DIGITS_PER_WORD = 4
+WORD_RANGE = 0x10000
+# What the tool writes to a command register to run the command.
+COMMAND_RUN = 1
+
+# The settings a user may change, under the keys async_read reports them by.
+# Port, baud rate and parity stay out: the module's serial side is fixed to
+# the meter's 115200 baud, even parity.
+WRITABLE_FIELDS: dict[str, RegisterField[Any]] = {
+    "timeout": ModuleSettings.timeout,
+    "ip_address": ModuleNetwork.ip_address,
+    "netmask": ModuleNetwork.netmask,
+    "gateway": ModuleNetwork.gateway,
+    "dhcp": ModuleNetwork.dhcp,
+    "dns_server_1": ModuleNetwork.dns_server_1,
+    "dns_server_2": ModuleNetwork.dns_server_2,
+    "ntp_server_1": ModuleNetwork.ntp_server_1,
+    "ntp_server_2": ModuleNetwork.ntp_server_2,
+    "hostname": ModuleNetwork.hostname,
+    "ntp": ModuleNetwork.ntp,
+}
+
+
+def _encode(field: RegisterField[Any], value: Any) -> list[int]:
+    if isinstance(field, IPv4Field):
+        return list(divmod(int(IPv4Address(value)), WORD_RANGE))
+    if isinstance(field, StringField):
+        return encode_string(value, length=field.count)
+    return [int(value)]
 
 
 def _named[T](codes: dict[int, T], code: int | None) -> T | None:
@@ -117,10 +155,11 @@ def _named[T](codes: dict[int, T], code: int | None) -> T | None:
 
 
 class WagoModule:
-    """Reads the 879-9000 module itself, on its own Modbus unit."""
+    """Reads and writes the 879-9000 module itself, on its own Modbus unit."""
 
     def __init__(self, unit: ModbusUnit) -> None:
         """Bind the components to the module's unit; nothing is read yet."""
+        self._unit = unit
         self._settings = ModuleSettings(unit)
         self._network = ModuleNetwork(unit)
         self._version = ModuleVersion(unit)
@@ -163,3 +202,29 @@ class WagoModule:
             "parity": _named(PARITIES, settings.parity_code),
             "timeout": settings.timeout,
         }
+
+    async def async_write(self, changes: Mapping[str, Any]) -> None:
+        """Write `changes` the way the configuration tool does.
+
+        Both blocks go whole, then "store", then "apply". The keys are those
+        of WRITABLE_FIELDS; every word a change does not touch is read first
+        and written back as it was. Raises ModbusError; a block the module
+        refuses stops the write before anything is stored.
+        """
+        blocks = {
+            MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(
+                MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS
+            ),
+            MODULE_NETWORK_ADDRESS: await self._unit.read_holding_registers(
+                MODULE_NETWORK_ADDRESS, MODULE_NETWORK_WORDS
+            ),
+        }
+        for key, value in changes.items():
+            field = WRITABLE_FIELDS[key]
+            start = max(address for address in blocks if address <= field.address)
+            offset = field.address - start
+            blocks[start][offset : offset + field.count] = _encode(field, value)
+        for start, words in blocks.items():
+            await self._unit.write_registers(start, words)
+        await self._unit.write_register(MODULE_STORE_COMMAND, COMMAND_RUN)
+        await self._unit.write_register(MODULE_APPLY_COMMAND, COMMAND_RUN)

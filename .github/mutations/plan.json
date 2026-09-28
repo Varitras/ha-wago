@@ -117,5 +117,26 @@
     "old": "        for _ in range(BROWSE_ATTEMPTS):\n",
     "new": "        for _ in range(1):\n",
     "tests": "asks_again_and_reports_each_module_once"
+  },
+  {
+    "label": "module write: words nobody decoded must go back as read",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "            MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(\n                MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS\n            ),\n",
+    "new": "            MODULE_SETTINGS_ADDRESS: [0] * MODULE_SETTINGS_WORDS,\n",
+    "tests": "written_stored_and_applied_as_the_tool_does"
+  },
+  {
+    "label": "module page: an unchanged page must not write to the module's flash",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if not changes:\n            return True\n",
+    "new": "",
+    "tests": "unchanged_page_writes_nothing"
+  },
+  {
+    "label": "module page: the gateway must lie in the module's network",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if gateway_text != UNSET and (gateway not in network or gateway == host):\n",
+    "new": "    if gateway_text != UNSET and gateway == host:\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
   }
 ]

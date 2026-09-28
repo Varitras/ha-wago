@@ -55,7 +55,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "intervals": {
         "data": {
           "measurement_interval": "Poll interval for measurements (seconds)",
           "energy_interval": "Poll interval for energy counters (seconds)"
@@ -64,10 +64,54 @@
           "measurement_interval": "How often voltage, current, power and power factor are read.",
           "energy_interval": "How often the energy counters are read. They change slowly, so a longer interval keeps the load on the Modbus link low."
         }
+      },
+      "init": {
+        "menu_options": {
+          "intervals": "Poll intervals",
+          "module": "Module settings"
+        }
+      },
+      "module": {
+        "title": "Module settings",
+        "description": "Settings of the 879-9000 module, read from it just now. Saving writes the changes to the module, stores them there and makes the module use them. The serial side stays fixed to the meter: {modbus_port}, {baud_rate} baud, parity {parity}.\n\nA new address or DHCP moves the module away from its old address. With a fixed address the entry follows it; with DHCP the search finds it again as long as it is in one of Home Assistant's subnets.",
+        "data": {
+          "dhcp": "DHCP",
+          "ip_address": "IP address",
+          "netmask": "Netmask",
+          "gateway": "Gateway",
+          "dns_server_1": "DNS server 1",
+          "dns_server_2": "DNS server 2",
+          "ntp": "Time synchronisation (NTP)",
+          "ntp_server_1": "NTP server 1",
+          "ntp_server_2": "NTP server 2",
+          "hostname": "Host name",
+          "timeout": "Modbus timeout"
+        },
+        "data_description": {
+          "dhcp": "Take the address from a DHCP server instead of the fixed one below.",
+          "ip_address": "Fixed address of the module. Kept for when DHCP is off.",
+          "netmask": "Netmask of the fixed address, for example 255.255.255.0.",
+          "gateway": "Router for other networks; empty for none. Has to be in the module's network.",
+          "dns_server_1": "Empty for none.",
+          "dns_server_2": "Empty for none.",
+          "ntp": "Set the module's clock from a time server.",
+          "ntp_server_1": "Address of a time server; empty for none.",
+          "ntp_server_2": "Address of a second time server; empty for none.",
+          "hostname": "Name the module gives a DHCP server: letters, digits and hyphens.",
+          "timeout": "How long the module waits for the meter's answer."
+        }
       }
     },
     "error": {
-      "not_a_whole_number": "Enter a whole number"
+      "not_a_whole_number": "Enter a whole number",
+      "invalid_address": "Enter an IPv4 address such as 192.168.1.10",
+      "invalid_netmask": "Enter a netmask such as 255.255.255.0",
+      "invalid_hostname": "A host name has letters, digits and hyphens only, and neither starts nor ends with a hyphen",
+      "gateway_outside_network": "The gateway has to be another address in the module's network",
+      "module_write_failed": "The module did not accept the settings. If its address changed, the entry follows it once the search finds the module."
+    },
+    "abort": {
+      "module_not_answering": "The module did not answer; its settings cannot be shown"
     }
   },
   "entity": {

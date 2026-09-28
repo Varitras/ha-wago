@@ -18,11 +18,14 @@ from custom_components.wago_879.const import (
     DOMAIN,
 )
 from custom_components.wago_879.wago_879_api.discovery import FoundModule
+from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import NumberSelector, SelectSelector, TextSelector
+
+from .test_module import module_holding
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -516,3 +519,168 @@ async def test_a_meter_known_without_its_module_keeps_its_host_name(hass, meter)
 
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == "wago-module"
+
+
+MODULE_FORM = {
+    "dhcp": False,
+    "ip_address": HOST,
+    "netmask": "255.255.255.0",
+    "gateway": "192.0.2.1",
+    "dns_server_1": "192.0.2.1",
+    "dns_server_2": "192.0.2.1",
+    "ntp": True,
+    "ntp_server_1": "192.0.2.1",
+    "ntp_server_2": "",
+    "hostname": "Wago-TCP",
+    "timeout": 3000,
+}
+
+
+async def _loaded_with_module(hass, meter):
+    """An entry whose module lives at the entry's own address."""
+    raw = module_holding()
+    # The module's address as the entry reaches it: 0x0064-0x0065 = HOST.
+    raw["holding"].update({0x0064: 0xC000, 0x0065: 0x020A})
+    meter.load_module_raw(raw)
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def _module_form(hass, entry):
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["intervals", "module"]
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "module"}
+    )
+
+
+def _module_writes(meter):
+    writes = []
+    meter.connections[-1].for_unit(MODULE_UNIT_ID).on_write(writes.append)
+    return writes
+
+
+async def test_the_module_page_shows_what_the_module_holds_now(hass, meter):
+    entry = await _loaded_with_module(hass, meter)
+
+    result = await _module_form(hass, entry)
+
+    assert result["step_id"] == "module"
+    defaults = {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+    }
+    assert defaults == MODULE_FORM
+    # The serial side is fixed to the meter; shown, not offered.
+    assert result["description_placeholders"] == {
+        "modbus_port": "rs232",
+        "baud_rate": "115200",
+        "parity": "even",
+    }
+
+
+async def test_a_changed_setting_is_written_and_the_entry_reloaded(hass, meter):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    writes = _module_writes(meter)
+    connections_before = len(meter.params_seen)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "ntp_server_2": "192.0.2.1"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert [write.address for write in writes] == [0x0000, 0x0064, 0x03F2, 0x03F1]
+    # NTP server 2 at 0x0071-0x0072 of the network block.
+    assert writes[1].values[0x0071 - 0x0064 : 0x0073 - 0x0064] == [0xC000, 0x0201]
+    # The device page shows what was read at setup; one reload reads it anew.
+    assert len(meter.params_seen) == connections_before + 1
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_an_unchanged_page_writes_nothing(hass, meter):
+    """Every write goes to the module's flash; nothing changed, nothing to wear."""
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    writes = _module_writes(meter)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], MODULE_FORM
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert writes == []
+
+
+async def test_a_new_module_address_takes_the_entry_along(hass, meter):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "ip_address": "192.0.2.11"}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.data[CONF_HOST] == "192.0.2.11"
+    assert entry.state is ConfigEntryState.LOADED
+    assert meter.params_seen[-1].host == "192.0.2.11"
+
+
+async def test_a_setting_the_module_cannot_use_is_a_form_error(hass, meter):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    writes = _module_writes(meter)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "gateway": "198.51.100.1"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "gateway_outside_network"}
+    assert writes == []
+
+
+async def test_a_write_the_module_refuses_is_a_form_error(hass, meter):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    meter.connections[-1].for_unit(MODULE_UNIT_ID).fail_write(
+        0x0064, ModbusConnectionError("down")
+    )
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "hostname": "meter-room"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "module_write_failed"}
+
+
+async def test_a_module_gone_silent_ends_the_page(hass, meter):
+    """The page shows what the module holds now, not what setup read; with
+    no answer there is nothing true to show."""
+    entry = await _loaded_with_module(hass, meter)
+    meter.connections[-1].for_unit(MODULE_UNIT_ID).fail_requests(
+        ModbusConnectionError("down")
+    )
+
+    result = await _module_form(hass, entry)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "module_not_answering"
+
+
+async def test_without_the_module_the_options_are_the_intervals(hass, meter):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "intervals"
