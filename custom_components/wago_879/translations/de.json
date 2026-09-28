@@ -111,7 +111,8 @@
       "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet."
     },
     "abort": {
-      "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden"
+      "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden",
+      "module_not_applied": "Das Modul hat die Einstellungen gespeichert, ihre Übernahme aber nicht bestätigt. Es verwendet sie spätestens nach dem nächsten Neustart."
     }
   },
   "entity": {

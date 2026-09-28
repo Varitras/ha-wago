@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from ipaddress import IPv4Address
 import math
 from typing import Any
 
-from modbus_connection import ModbusUnit
+from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.encode import encode_string
 from modbus_connection.model import Component
 from modbus_connection.model.fields import IPv4Field, RegisterField, StringField
@@ -37,6 +38,14 @@ SERIAL_HEX_DIGITS = 8
 # The meter codes the manual (appendix A3.2, register 0x4002) lists for the
 # variants sharing this register map: 4PU, 4PS and 2PU CT.
 SUPPORTED_METER_CODES = frozenset({0x1111, 0x1112, 0x1113})
+
+
+class ModuleNotApplied(Exception):
+    """The module stored new settings but did not confirm using them.
+
+    It uses stored settings after its next restart at the latest; whether it
+    already does is unknown.
+    """
 
 
 class UnsupportedMeter(Exception):
@@ -165,6 +174,7 @@ class WagoModule:
     def __init__(self, unit: ModbusUnit) -> None:
         """Bind the components to the module's unit; nothing is read yet."""
         self._unit = unit
+        self._write_lock = asyncio.Lock()
         self._settings = ModuleSettings(unit)
         self._network = ModuleNetwork(unit)
         self._version = ModuleVersion(unit)
@@ -213,23 +223,29 @@ class WagoModule:
 
         Both blocks go whole, then "store", then "apply". The keys are those
         of WRITABLE_FIELDS; every word a change does not touch is read first
-        and written back as it was. Raises ModbusError; a block the module
-        refuses stops the write before anything is stored.
+        and written back as it was. Raises ModbusError when nothing was
+        stored, ModuleNotApplied when only "apply" went unanswered.
         """
-        blocks = {
-            MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(
-                MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS
-            ),
-            MODULE_NETWORK_ADDRESS: await self._unit.read_holding_registers(
-                MODULE_NETWORK_ADDRESS, MODULE_NETWORK_WORDS
-            ),
-        }
-        for key, value in changes.items():
-            field = WRITABLE_FIELDS[key]
-            start = max(address for address in blocks if address <= field.address)
-            offset = field.address - start
-            blocks[start][offset : offset + field.count] = _encode(field, value)
-        for start, words in blocks.items():
-            await self._unit.write_registers(start, words)
-        await self._unit.write_register(MODULE_STORE_COMMAND, COMMAND_RUN)
-        await self._unit.write_register(MODULE_APPLY_COMMAND, COMMAND_RUN)
+        # Whole blocks read just before: two writes interleaved would put back
+        # what the other one changed.
+        async with self._write_lock:
+            blocks = {
+                MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(
+                    MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS
+                ),
+                MODULE_NETWORK_ADDRESS: await self._unit.read_holding_registers(
+                    MODULE_NETWORK_ADDRESS, MODULE_NETWORK_WORDS
+                ),
+            }
+            for key, value in changes.items():
+                field = WRITABLE_FIELDS[key]
+                start = max(address for address in blocks if address <= field.address)
+                offset = field.address - start
+                blocks[start][offset : offset + field.count] = _encode(field, value)
+            for start, words in blocks.items():
+                await self._unit.write_registers(start, words)
+            await self._unit.write_register(MODULE_STORE_COMMAND, COMMAND_RUN)
+            try:
+                await self._unit.write_register(MODULE_APPLY_COMMAND, COMMAND_RUN)
+            except ModbusError as err:
+                raise ModuleNotApplied from err

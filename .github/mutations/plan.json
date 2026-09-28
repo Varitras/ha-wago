@@ -121,14 +121,14 @@
   {
     "label": "module write: words nobody decoded must go back as read",
     "path": "custom_components/wago_879/wago_879_api/device.py",
-    "old": "            MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(\n                MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS\n            ),\n",
-    "new": "            MODULE_SETTINGS_ADDRESS: [0] * MODULE_SETTINGS_WORDS,\n",
+    "old": "                MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(\n                    MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS\n                ),\n",
+    "new": "                MODULE_SETTINGS_ADDRESS: [0] * MODULE_SETTINGS_WORDS,\n",
     "tests": "written_stored_and_applied_as_the_tool_does"
   },
   {
     "label": "module page: an unchanged page must not write to the module's flash",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "        if not changes:\n            return True\n",
+    "old": "        if not changes:\n            return self._finished()\n",
     "new": "",
     "tests": "unchanged_page_writes_nothing"
   },
@@ -208,5 +208,47 @@
     "old": "        if stale.model == MODULE_MODEL and stale.id != device.id:\n",
     "new": "        if False:\n",
     "tests": "replaced_module_leaves_the_entry"
+  },
+  {
+    "label": "options: DHCP left on must not move the entry",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        moves = not settings[\"dhcp\"] and _is_address(host) and host != new_address\n",
+    "new": "        moves = _is_address(host) and host != new_address\n",
+    "tests": "fixed_address_that_is_not_the_entry_s_moves_nothing"
+  },
+  {
+    "label": "options: a host name entry must keep its name",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        moves = not settings[\"dhcp\"] and _is_address(host) and host != new_address\n",
+    "new": "        moves = not settings[\"dhcp\"] and host != new_address\n",
+    "tests": "dhcp_off_keeps_an_entry_s_host_name"
+  },
+  {
+    "label": "options: an entry reached elsewhere must stay",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        reached_the_module = host == current[\"ip_address\"] or current[\"dhcp\"]\n",
+    "new": "        reached_the_module = True\n",
+    "tests": "fixed_address_that_is_not_the_entry_s_moves_nothing"
+  },
+  {
+    "label": "options: switching DHCP off must take the entry to the fixed address",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        reached_the_module = host == current[\"ip_address\"] or current[\"dhcp\"]\n",
+    "new": "        reached_the_module = host == current[\"ip_address\"]\n",
+    "tests": "dhcp_off_takes_the_entry"
+  },
+  {
+    "label": "options: stored settings must take the entry along",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "            self._follow_module(current, settings)\n            return self.async_abort(reason=\"module_not_applied\")\n",
+    "new": "            return self.async_abort(reason=\"module_not_applied\")\n",
+    "tests": "unconfirmed_apply_still_takes"
+  },
+  {
+    "label": "module write: two writes must not interleave",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "        async with self._write_lock:\n",
+    "new": "        async with asyncio.timeout(None):\n",
+    "tests": "two_writes_at_once"
   }
 ]

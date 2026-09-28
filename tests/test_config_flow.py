@@ -655,13 +655,15 @@ MODULE_FORM = {
 }
 
 
-async def _loaded_with_module(hass, meter):
+async def _loaded_with_module(hass, meter, words=None, host=HOST):
     """An entry whose module lives at the entry's own address."""
     raw = module_holding()
     # The module's address as the entry reaches it: 0x0064-0x0065 = HOST.
-    raw["holding"].update({0x0064: 0xC000, 0x0065: 0x020A})
+    raw["holding"].update({0x0064: 0xC000, 0x0065: 0x020A, **(words or {})})
     meter.load_module_raw(raw)
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: host}, unique_id=SERIAL
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -803,3 +805,86 @@ async def test_without_the_module_the_options_are_the_intervals(hass, meter):
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "intervals"
+
+
+NEW_ADDRESS = "192.0.2.11"
+# The module's fixed address in its register while DHCP leased it HOST.
+FIXED_ADDRESS = {0x0064: 0xC000, 0x0065: 0x0204}
+DHCP_ON = {0x006A: 1}
+
+
+async def _save_module(hass, entry, changes):
+    result = await _module_form(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**result_defaults(result), **changes}
+    )
+    await hass.async_block_till_done()
+    return result
+
+
+def result_defaults(result):
+    """The module page as it opened, unchanged."""
+    return {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+    }
+
+
+async def test_an_unconfirmed_apply_still_takes_the_entry_along(hass, meter):
+    """Once stored, the module uses the address after its next restart at the
+    latest; the entry has to be there, and the user has to know."""
+    entry = await _loaded_with_module(hass, meter)
+    meter.connections[-1].for_unit(MODULE_UNIT_ID).fail_write(
+        0x03F1, ModbusConnectionError("gone")
+    )
+
+    result = await _save_module(hass, entry, {"ip_address": NEW_ADDRESS})
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "module_not_applied"
+    assert entry.data[CONF_HOST] == NEW_ADDRESS
+
+
+async def test_switching_dhcp_off_takes_the_entry_to_the_fixed_address(hass, meter):
+    """With DHCP on the entry reaches the lease, not the fixed address the
+    module falls back to - which the user did not have to touch."""
+    entry = await _loaded_with_module(hass, meter, {**FIXED_ADDRESS, **DHCP_ON})
+
+    await _save_module(hass, entry, {"dhcp": False})
+
+    assert entry.data[CONF_HOST] == "192.0.2.4"
+    assert entry.state is ConfigEntryState.LOADED
+
+
+@pytest.mark.parametrize(
+    ("words", "host"),
+    [
+        # DHCP stays on: the new fixed address is not where the module goes.
+        (DHCP_ON, HOST),
+        # The entry reaches the module through another address, a forwarded
+        # port for one; the module's own address says nothing about it.
+        (FIXED_ADDRESS, HOST),
+    ],
+    ids=["dhcp on", "reached through another address"],
+)
+async def test_a_new_fixed_address_that_is_not_the_entry_s_moves_nothing(
+    hass, meter, words, host
+):
+    entry = await _loaded_with_module(hass, meter, words, host)
+
+    await _save_module(hass, entry, {"ip_address": NEW_ADDRESS})
+
+    assert entry.data[CONF_HOST] == host
+    assert entry.state is ConfigEntryState.LOADED
+
+
+async def test_switching_dhcp_off_keeps_an_entry_s_host_name(hass, meter):
+    """A host name follows the module by itself; today's address would not."""
+    entry = await _loaded_with_module(
+        hass, meter, {**FIXED_ADDRESS, **DHCP_ON}, "wago-module"
+    )
+
+    await _save_module(hass, entry, {"dhcp": False})
+
+    assert entry.data[CONF_HOST] == "wago-module"
+    assert entry.state is ConfigEntryState.LOADED

@@ -111,7 +111,8 @@
       "module_write_failed": "The module did not accept the settings. If its address changed, the entry follows it once the search finds the module."
     },
     "abort": {
-      "module_not_answering": "The module did not answer; its settings cannot be shown"
+      "module_not_answering": "The module did not answer; its settings cannot be shown",
+      "module_not_applied": "The module stored the settings but did not confirm using them. It uses them after its next restart at the latest."
     }
   },
   "entity": {

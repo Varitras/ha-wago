@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from ipaddress import ip_address
+import logging
 from typing import Any
 
 from modbus_connection import ModbusError, ModbusTcpParams
@@ -46,12 +47,20 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .discovery import async_find_modules
+from .logging_policy import redact
 from .module_settings import OPTIONAL_ADDRESSES, UNSET, module_settings
 from .sensor import MODULE_MODEL, device_name, entry_title
-from .wago_879_api.device import WORD_RANGE, UnsupportedMeter, WagoMeter, WagoModule
+from .wago_879_api.device import (
+    WORD_RANGE,
+    ModuleNotApplied,
+    UnsupportedMeter,
+    WagoMeter,
+    WagoModule,
+)
 from .wago_879_api.discovery import FoundModule
 from .wago_879_api.registers import MODULE_UNIT_ID
 
+_LOGGER = logging.getLogger(__name__)
 PORT_MAX = 65535
 # The highest address a Modbus unit can have; 0 is broadcast.
 UNIT_ID_MAX = 247
@@ -493,6 +502,10 @@ def _module_form(values: dict[str, Any]) -> dict[str, Any]:
     return form
 
 
+def _fixed_fields(values: dict[str, Any]) -> dict[str, str]:
+    return {key: str(values[key] or "-") for key in MODULE_FIXED_FIELDS}
+
+
 class WagoOptionsFlow(config_entries.OptionsFlow):
     """The poll intervals, and the 879-9000's own settings when it answers."""
 
@@ -558,17 +571,13 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = error
             else:
                 assert settings is not None
-                if await self._async_write(module_api, current, settings):
-                    return self.async_create_entry(data=dict(self.config_entry.options))
-                errors["base"] = "module_write_failed"
+                return await self._async_write(module_api, current, settings)
         return self.async_show_form(
             step_id="module",
             data_schema=self.add_suggested_values_to_schema(
                 _module_schema(), user_input or _module_form(current)
             ),
-            description_placeholders={
-                key: str(current[key] or "-") for key in MODULE_FIXED_FIELDS
-            },
+            description_placeholders=_fixed_fields(current),
             errors=errors,
         )
 
@@ -577,24 +586,54 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
         module_api: WagoModule,
         current: dict[str, Any],
         settings: dict[str, Any],
-    ) -> bool:
-        """Write what changed and let the entry follow; False when refused."""
+    ) -> config_entries.ConfigFlowResult:
+        """Write what changed, then let the entry follow the module."""
         changes = {
             key: value for key, value in settings.items() if current[key] != value
         }
         # Every write goes to the module's flash.
         if not changes:
-            return True
+            return self._finished()
+        host = self.config_entry.data[CONF_HOST]
         try:
             await module_api.async_write(changes)
-        except ModbusError:
-            return False
+        except ModbusError as err:
+            _LOGGER.debug("Module settings not written: %s", redact(str(err), host))
+            return self.async_show_form(
+                step_id="module",
+                data_schema=self.add_suggested_values_to_schema(
+                    _module_schema(), _module_form(settings)
+                ),
+                description_placeholders=_fixed_fields(current),
+                errors={"base": "module_write_failed"},
+            )
+        except ModuleNotApplied as err:
+            # Stored: the module uses the settings by its next restart at the
+            # latest, so the entry follows as if it had confirmed them.
+            _LOGGER.debug(
+                "Module settings stored, not confirmed: %s",
+                redact(str(err.__cause__), host),
+            )
+            self._follow_module(current, settings)
+            return self.async_abort(reason="module_not_applied")
+        self._follow_module(current, settings)
+        return self._finished()
+
+    def _finished(self) -> config_entries.ConfigFlowResult:
+        """End the page; the module's settings are no entry options."""
+        return self.async_create_entry(data=dict(self.config_entry.options))
+
+    def _follow_module(self, current: dict[str, Any], settings: dict[str, Any]) -> None:
+        """Point the entry where the module now is, or reload it in place."""
         entry = self.config_entry
+        host = entry.data[CONF_HOST]
         new_address = settings["ip_address"]
-        reached_by_address = entry.data[CONF_HOST] == current["ip_address"]
-        if "ip_address" in changes and reached_by_address and not settings["dhcp"]:
+        # With DHCP on, the entry reached a lease, not the fixed address the
+        # register holds; switched off, the module goes to that fixed address.
+        reached_the_module = host == current["ip_address"] or current["dhcp"]
+        moves = not settings["dhcp"] and _is_address(host) and host != new_address
+        if moves and reached_the_module:
             async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: new_address})
-            return True
+            return
         # The device page shows what setup read.
         self.hass.config_entries.async_schedule_reload(entry.entry_id)
-        return True

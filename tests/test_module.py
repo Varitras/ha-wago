@@ -5,11 +5,13 @@ module (Modbus TCP, unit 255), with the addresses moved to the documentation
 range and the serial number made up.
 """
 
+import asyncio
+
 from modbus_connection import ModbusConnectionError
 from modbus_connection.mock import MockModbusConnection
 import pytest
 
-from custom_components.wago_879.wago_879_api.device import WagoModule
+from custom_components.wago_879.wago_879_api.device import ModuleNotApplied, WagoModule
 from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 
 
@@ -176,3 +178,43 @@ async def test_version_words_are_unsigned(unit):
     unit.load_raw({"holding": {0x0405: 40000}})
 
     assert (await WagoModule(unit).async_read())["firmware_version"] == "1.0.40000"
+
+
+async def test_a_store_the_module_refuses_is_a_plain_failure(unit):
+    unit.fail_write(0x03F2, ModbusConnectionError("down"))
+
+    with pytest.raises(ModbusConnectionError):
+        await WagoModule(unit).async_write({"hostname": "meter-room"})
+
+
+async def test_an_unconfirmed_apply_says_the_settings_are_stored(unit):
+    """After "store" the module keeps the settings whatever "apply" answers;
+    the caller has to know the difference."""
+    unit.fail_write(0x03F1, ModbusConnectionError("down"))
+
+    with pytest.raises(ModuleNotApplied):
+        await WagoModule(unit).async_write({"hostname": "meter-room"})
+
+
+async def test_two_writes_at_once_keep_both_changes(unit):
+    """Each write sends whole blocks read just before; interleaved, the later
+    one would put back what the earlier one changed."""
+    read = unit.read_holding_registers
+
+    async def read_and_yield(address, count):
+        words = await read(address, count)
+        await asyncio.sleep(0)
+        return words
+
+    unit.read_holding_registers = read_and_yield
+    module = WagoModule(unit)
+
+    await asyncio.gather(
+        module.async_write({"timeout": 2500}),
+        module.async_write({"hostname": "meter-room"}),
+    )
+
+    unit.read_holding_registers = read
+    values = await module.async_read()
+    assert values["timeout"] == 2500
+    assert values["hostname"] == "meter-room"
