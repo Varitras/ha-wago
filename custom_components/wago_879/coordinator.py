@@ -23,6 +23,7 @@ from .logging_policy import (
     OfflineIsNotAnError,
     redact,
 )
+from .wago_879_api.device import WagoModule
 
 _LOGGER = logging.getLogger(__name__)
 # This logger is the one handed to every WagoCoordinator below, and a filter
@@ -118,6 +119,10 @@ class WagoRuntimeData:
     identity: dict[str, Any]
     measurements: WagoCoordinator
     energy: WagoCoordinator
+    # None behind any gateway other than the 879-9000.
+    module: dict[str, Any] | None = None
+    module_device_id: str | None = None
+    module_api: WagoModule | None = None
 
     def coordinator_for(self, block: Block) -> WagoCoordinator | None:
         """The poller feeding a block; identity is read once and has none."""
@@ -126,7 +131,7 @@ class WagoRuntimeData:
                 return self.measurements
             case Block.ENERGY:
                 return self.energy
-            case Block.IDENTITY:
+            case Block.IDENTITY | Block.MODULE:
                 return None
             case _:
                 assert_never(block)

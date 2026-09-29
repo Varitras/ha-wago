@@ -9,7 +9,11 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
-from custom_components.wago_879.entity_descriptions import SENSOR_DESCRIPTIONS
+from custom_components.wago_879.entity_descriptions import (
+    MODULE_BINARY_SENSOR_DESCRIPTIONS,
+    MODULE_SENSOR_DESCRIPTIONS,
+    SENSOR_DESCRIPTIONS,
+)
 
 PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "custom_components" / "wago_879"
 LANGUAGES = sorted((PACKAGE / "translations").glob("*.json"))
@@ -21,9 +25,28 @@ def _load(path):
 
 @pytest.mark.parametrize("language", LANGUAGES, ids=lambda p: p.stem)
 def test_every_sensor_key_has_a_name(language):
+    entities = _load(language)["entity"]
+    missing = [
+        f"sensor.{description.translation_key}"
+        for description in (*SENSOR_DESCRIPTIONS, *MODULE_SENSOR_DESCRIPTIONS)
+        if description.translation_key not in entities["sensor"]
+    ] + [
+        f"binary_sensor.{description.translation_key}"
+        for description in MODULE_BINARY_SENSOR_DESCRIPTIONS
+        if description.translation_key not in entities.get("binary_sensor", {})
+    ]
+    assert not missing, f"{language.name}: {missing}"
+
+
+@pytest.mark.parametrize("language", LANGUAGES, ids=lambda p: p.stem)
+def test_every_enum_state_has_a_name(language):
+    """An enum sensor shows its raw state code without one."""
     names = _load(language)["entity"]["sensor"]
     missing = [
-        d.translation_key for d in SENSOR_DESCRIPTIONS if d.translation_key not in names
+        f"{description.translation_key}.{option}"
+        for description in (*SENSOR_DESCRIPTIONS, *MODULE_SENSOR_DESCRIPTIONS)
+        for option in description.options or ()
+        if option not in names.get(description.translation_key, {}).get("state", {})
     ]
     assert not missing, f"{language.name}: {missing}"
 
@@ -176,15 +199,22 @@ def test_every_sensor_without_a_device_class_has_an_icon():
     """The quality scale's icon-translations rule: a device class brings its
     own icon, everything else needs one in icons.json - and icons.json may not
     name a key no sensor uses."""
-    icons = _load(PACKAGE / "icons.json")["entity"]["sensor"]
-    keys = {description.translation_key for description in SENSOR_DESCRIPTIONS}
+    icons = _load(PACKAGE / "icons.json")["entity"]
+    sensors = (*SENSOR_DESCRIPTIONS, *MODULE_SENSOR_DESCRIPTIONS)
     unnamed = [
-        description.translation_key
-        for description in SENSOR_DESCRIPTIONS
-        if description.device_class is None and description.translation_key not in icons
+        f"sensor.{description.translation_key}"
+        for description in sensors
+        if description.device_class is None
+        and description.translation_key not in icons["sensor"]
+    ] + [
+        f"binary_sensor.{description.translation_key}"
+        for description in MODULE_BINARY_SENSOR_DESCRIPTIONS
+        if description.translation_key not in icons.get("binary_sensor", {})
     ]
     assert not unnamed
-    assert set(icons) <= keys
+    assert set(icons["sensor"]) <= {
+        description.translation_key for description in sensors
+    }
 
 
 def test_every_refused_adoption_has_a_repair_text():

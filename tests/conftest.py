@@ -4,11 +4,15 @@ Declares the Home Assistant custom-component test plugin (the `hass` fixture
 and a matching Home Assistant install) and keeps every test off real hardware.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
 from modbus_connection import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
+
+from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 
 pytest_plugins = ("pytest_homeassistant_custom_component",)
 
@@ -33,19 +37,38 @@ def _no_real_meter(monkeypatch):
     monkeypatch.setattr(CORE_CONNECTION, _refuse)
 
 
+# Where the integration sends its UDP search for modules.
+MODULE_SEARCH = "custom_components.wago_879.discovery.async_browse"
+
+
+@pytest.fixture(autouse=True)
+def module_search(monkeypatch):
+    """The modules a search finds: none, unless a test sets `return_value`.
+
+    Global for the same reason as `_no_real_meter`: every loaded entry starts
+    the background search.
+    """
+    search = AsyncMock(return_value=[])
+    monkeypatch.setattr(MODULE_SEARCH, search)
+    return search
+
+
 class SharedMockModbus:
     """Stands in for the core modbus integration's connection factory.
 
     The hub closes the shared connection when the last entry lets go of it
     and builds a new one on the next load, so every call hands out a fresh
     in-memory connection - seeded with the same registers and failures, the
-    way the real meter is still the same meter after a reload.
+    way the real meter is still the same meter after a reload. What is
+    written to the module stays written, as it does in the module's flash.
     """
 
     def __init__(self) -> None:
         self.params_seen: list = []
         self.connections: list[MockModbusConnection] = []
         self._raw: dict = {"holding": {}}
+        self._module_raw: dict = {"holding": {}}
+        self._module_failure: Exception | None = None
         self._request_failure: Exception | None = None
         self._read_failures: list = []
 
@@ -57,6 +80,10 @@ class SharedMockModbus:
         unit.fail_requests(self._request_failure)
         for address, error in self._read_failures:
             unit.fail_read(address, error, register_type="holding")
+        module = connection.for_unit(MODULE_UNIT_ID)
+        module.load_raw(self._module_raw)
+        module.fail_requests(self._module_failure)
+        module.on_write(self._keep_module_write)
         self.connections.append(connection)
         return connection
 
@@ -74,6 +101,23 @@ class SharedMockModbus:
             self._raw[space].update(values)
         for connection in self.connections:
             connection.for_unit(1).load_raw(raw)
+
+    def load_module_raw(self, raw: dict) -> None:
+        """Registers of the 879-9000 module itself, on its own unit."""
+        for space, values in raw.items():
+            self._module_raw[space].update(values)
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).load_raw(raw)
+
+    def _keep_module_write(self, event) -> None:
+        for offset, value in enumerate(event.values):
+            self._module_raw["holding"][event.address + offset] = value
+
+    def fail_module_requests(self, error: Exception | None) -> None:
+        """Unit 255 fails every request: a gateway that is no 879-9000."""
+        self._module_failure = error
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).fail_requests(error)
 
     def fail_read_band(self, address: int) -> None:
         """The meter refuses the holding block starting at ``address``."""

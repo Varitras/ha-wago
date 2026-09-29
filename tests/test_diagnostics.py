@@ -13,6 +13,7 @@ from custom_components.wago_879.diagnostics import async_get_config_entry_diagno
 from homeassistant.config_entries import ConfigEntryState
 
 from .test_e2e import BASE_DATA, SERIAL, _entry, _setup, holding
+from .test_module import module_holding
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -56,3 +57,30 @@ async def test_diagnostics_of_an_entry_that_is_not_loaded(hass, mock_modbus):
     assert diagnostics["entry"]["state"] == ConfigEntryState.SETUP_RETRY.value
     assert "measurements" not in diagnostics
     assert BASE_DATA[CONF_HOST] not in json.dumps(diagnostics)
+
+
+async def test_diagnostics_carry_the_module_without_its_addresses(hass, meter):
+    """The module's settings name the network it sits in; the shape of its
+    configuration is what helps a report, not the addresses."""
+    raw = module_holding()
+    # A distinct address in every server word, so each one's redaction counts.
+    servers = {0x006B: 21, 0x006D: 22, 0x006F: 23, 0x0071: 24}
+    for address, last in servers.items():
+        raw["holding"].update({address: 0xC000, address + 1: 0x0200 | last})
+    meter.load_module_raw(raw)
+    entry = await _setup(hass, _entry(hass))
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    text = json.dumps(diagnostics)
+
+    assert diagnostics["module"]["baud_rate"] == 115200
+    assert diagnostics["module"]["ntp"] is True
+    identifying = [
+        "192.0.2.4",
+        "192.0.2.1",
+        *(f"192.0.2.{last}" for last in servers.values()),
+        "Wago-TCP",
+        "033000000001",
+    ]
+    for value in identifying:
+        assert value not in text, value

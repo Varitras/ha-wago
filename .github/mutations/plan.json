@@ -86,8 +86,8 @@
   {
     "label": "diagnostics: the address must be redacted",
     "path": "custom_components/wago_879/diagnostics.py",
-    "old": "TO_REDACT = {CONF_HOST, \"serial_number\", \"unique_id\"}\n",
-    "new": "TO_REDACT = {\"serial_number\", \"unique_id\"}\n",
+    "old": "TO_REDACT = {\n    CONF_HOST,\n    \"serial_number\",\n",
+    "new": "TO_REDACT = {\n    \"serial_number\",\n",
     "tests": "diagnostics_carry_the_readings_without_address_or_serial"
   },
   {
@@ -96,5 +96,229 @@
     "old": "    ir.async_delete_issue(hass, DOMAIN, _adoption_blocked(entry))\n    host = str(entry.data[CONF_HOST])\n",
     "new": "    host = str(entry.data[CONF_HOST])\n",
     "tests": "a_blocked_adoption_is_a_repair_until_it_goes_through or does_not_outlive"
+  },
+  {
+    "label": "module: the meter must be linked to the module it is reached through",
+    "path": "custom_components/wago_879/sensor.py",
+    "old": "        info[\"via_device_id\"] = runtime.module_device_id\n",
+    "new": "        pass\n",
+    "tests": "the_module_is_its_own_device_with_every_setting"
+  },
+  {
+    "label": "discovery: a host name must survive a found module's address",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        moves = host != module.host and _is_address(host)\n",
+    "new": "        moves = host != module.host\n",
+    "tests": "reached_by_host_name_keeps_the_name"
+  },
+  {
+    "label": "discovery: the search must ask more than once",
+    "path": "custom_components/wago_879/wago_879_api/discovery.py",
+    "old": "        for _ in range(BROWSE_ATTEMPTS):\n",
+    "new": "        for _ in range(1):\n",
+    "tests": "asks_again_and_reports_each_module_once"
+  },
+  {
+    "label": "module write: words nobody decoded must go back as read",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "                MODULE_SETTINGS_ADDRESS: await self._unit.read_holding_registers(\n                    MODULE_SETTINGS_ADDRESS, MODULE_SETTINGS_WORDS\n                ),\n",
+    "new": "                MODULE_SETTINGS_ADDRESS: [0] * MODULE_SETTINGS_WORDS,\n",
+    "tests": "written_stored_and_applied_as_the_tool_does"
+  },
+  {
+    "label": "module page: an unchanged page must not write to the module's flash",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if not changes:\n            return self._finished()\n",
+    "new": "",
+    "tests": "unchanged_page_writes_nothing"
+  },
+  {
+    "label": "module page: the gateway must lie in the module's network",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if not usable or gateway not in network or gateway == host:\n",
+    "new": "    if not usable or gateway == host:\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a host mask must not pass as a netmask",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    canonical = str(interface.netmask) == settings[\"netmask\"]\n",
+    "new": "    canonical = True\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a gateway may not be the network's edge",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    usable = is_host_address(gateway) and gateway not in edges\n",
+    "new": "    usable = True\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a value the module holds must not block another change",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if \"hostname\" in changed:\n",
+    "new": "    if True:\n",
+    "tests": "module_holds_does_not_block_another_change"
+  },
+  {
+    "label": "discovery: a reply without a host address must be dropped",
+    "path": "custom_components/wago_879/wago_879_api/discovery.py",
+    "old": "    if not serial.isalnum() or not is_host_address(host):\n",
+    "new": "    if not serial.isalnum():\n",
+    "tests": "anything_but_a_module_reply_is_ignored"
+  },
+  {
+    "label": "registers: whole numbers must read unsigned",
+    "path": "custom_components/wago_879/wago_879_api/registers.py",
+    "old": "    return NumberField(address, count=count, signed=False)\n",
+    "new": "    return NumberField(address, count=count)\n",
+    "tests": "unsigned or above_32767"
+  },
+  {
+    "label": "discovery: an address must not outrank the module's serial",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if serials[entry.entry_id] is None and entry.data.get(CONF_HOST) == module.host:\n",
+    "new": "        if entry.data.get(CONF_HOST) == module.host:\n",
+    "tests": "entry_s_old_address_is_offered"
+  },
+  {
+    "label": "discovery: an entry may only move where its module answers",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if moves and await _async_module_answers_at(\n            self.hass, module, int(entry.data[CONF_PORT])\n        ):\n",
+    "new": "        if moves:\n",
+    "tests": "module_does_not_confirm_moves_nothing"
+  },
+  {
+    "label": "discovery: a meter must be probed once per run",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if module.serial_number in probed:\n",
+    "new": "        if False:\n",
+    "tests": "ignored_meter_is_probed_once"
+  },
+  {
+    "label": "user step: a meter waiting under Discovered must not block adding it",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "                await self.async_set_unique_id(serial, raise_on_progress=False)\n",
+    "new": "                await self.async_set_unique_id(serial)\n",
+    "tests": "waiting_under_discovered_can_be_added_by_hand"
+  },
+  {
+    "label": "setup: a replaced module must leave the entry",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "        if stale.model == MODULE_MODEL and stale.id != device.id:\n",
+    "new": "        if False:\n",
+    "tests": "replaced_module_leaves_the_entry"
+  },
+  {
+    "label": "options: DHCP left on must not move the entry",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        moves = not settings[\"dhcp\"] and _is_address(host) and host != new_address\n",
+    "new": "        moves = _is_address(host) and host != new_address\n",
+    "tests": "fixed_address_that_is_not_the_entry_s_moves_nothing"
+  },
+  {
+    "label": "options: a host name entry must keep its name",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        moves = not settings[\"dhcp\"] and _is_address(host) and host != new_address\n",
+    "new": "        moves = not settings[\"dhcp\"] and host != new_address\n",
+    "tests": "dhcp_off_keeps_an_entry_s_host_name"
+  },
+  {
+    "label": "options: an entry reached elsewhere must stay",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        reached_the_module = host == current[\"ip_address\"] or current[\"dhcp\"]\n",
+    "new": "        reached_the_module = True\n",
+    "tests": "fixed_address_that_is_not_the_entry_s_moves_nothing"
+  },
+  {
+    "label": "options: switching DHCP off must take the entry to the fixed address",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        reached_the_module = host == current[\"ip_address\"] or current[\"dhcp\"]\n",
+    "new": "        reached_the_module = host == current[\"ip_address\"]\n",
+    "tests": "dhcp_off_takes_the_entry"
+  },
+  {
+    "label": "options: stored settings must take the entry along",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "            self._follow_module(current, settings)\n            return self.async_abort(reason=\"module_not_applied\")\n",
+    "new": "            return self.async_abort(reason=\"module_not_applied\")\n",
+    "tests": "unconfirmed_apply_still_takes"
+  },
+  {
+    "label": "module write: two writes must not interleave",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "        async with self._write_lock:\n",
+    "new": "        async with asyncio.timeout(None):\n",
+    "tests": "two_writes_at_once"
+  },
+  {
+    "label": "setup: a gateway refusing unit 255 must not stop the meter",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "        return await module_api.async_read()\n    except ModbusError as err:\n",
+    "new": "        return await module_api.async_read()\n    except IndexError as err:\n",
+    "tests": "refuses_unit_255_still_loads"
+  },
+  {
+    "label": "discovery: a search without a socket must leave the host to type",
+    "path": "custom_components/wago_879/discovery.py",
+    "old": "    except OSError as err:\n",
+    "new": "    except IndexError as err:\n",
+    "tests": "cannot_open_a_socket"
+  },
+  {
+    "label": "discovery: an ignored meter must not be followed",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if entry is not None and entry.source != config_entries.SOURCE_IGNORE:\n",
+    "new": "        if entry is not None:\n",
+    "tests": "ignored_meter_is_probed_once"
+  },
+  {
+    "label": "user step: a module already configured must not be offered",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "                if _entry_of(self.hass, entries, module) is None\n",
+    "new": "                if True\n",
+    "tests": "leaves_out_a_module_already_configured"
+  },
+  {
+    "label": "module: another gateway on unit 255 must not pass for the module",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "        if self._version.device_type != MODULE_DEVICE_TYPE:\n",
+    "new": "        if False:\n",
+    "tests": "another_gateway_on_unit_255"
+  },
+  {
+    "label": "diagnostics: the module's servers must be redacted",
+    "path": "custom_components/wago_879/diagnostics.py",
+    "old": "    *MODULE_SERVERS,\n",
+    "new": "",
+    "tests": "carry_the_module_without_its_addresses"
+  },
+  {
+    "label": "discovery: a meter that did not answer must be asked again",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if error is None or error == \"unsupported_meter\":\n",
+    "new": "        if True:\n",
+    "tests": "did_not_answer_is_asked_again"
+  },
+  {
+    "label": "module page: a new timeout must stay within the word",
+    "path": "custom_components/wago_879/module_settings.py",
+    "old": "    if \"timeout\" in changed and settings[\"timeout\"] not in TIMEOUT_RANGE:\n",
+    "new": "    if False:\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "addresses: 0.0.0.0/8 is no host's address",
+    "path": "custom_components/wago_879/wago_879_api/addresses.py",
+    "old": "        address in THIS_NETWORK\n",
+    "new": "        address.is_unspecified\n",
+    "tests": "setting_the_module_cannot_use_is_refused"
+  },
+  {
+    "label": "module page: a timeout the module holds must reach the page",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "                    min=0,\n",
+    "new": "                    min=1,\n",
+    "tests": "timeout_the_form_would_refuse"
   }
 ]

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
+from typing import Any
 
 from modbus_connection import ModbusError, ModbusTcpParams
 
@@ -14,7 +16,12 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
     HomeAssistantError,
 )
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
+from homeassistant.helpers.typing import ConfigType
 
 from . import entity_id_rename, migration
 from .const import (
@@ -32,11 +39,25 @@ from .const import (
     INTERVALS_IN_OPTIONS_MINOR_VERSION,
 )
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
+from .discovery import async_start_discovery
 from .logging_policy import mask, redact
-from .sensor import entry_title
-from .wago_879_api.device import UnsupportedMeter, WagoMeter
+from .sensor import MODULE_MODEL, entry_title, module_device_info
+from .wago_879_api.device import UnsupportedMeter, WagoMeter, WagoModule
+from .wago_879_api.registers import MODULE_UNIT_ID
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+_LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Start the module search.
+
+    Here rather than per entry: the entry whose module moved is the one whose
+    setup keeps failing at the old address.
+    """
+    async_start_discovery(hass)
+    return True
 
 
 def _adoption_blocked(entry: WagoConfigEntry) -> str:
@@ -165,15 +186,57 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     await measurements.async_config_entry_first_refresh()
     await energy.async_config_entry_first_refresh()
 
+    module_api = WagoModule(async_get_unit(hass, entry, params, MODULE_UNIT_ID))
+    module = await _async_read_module(module_api, host)
     entry.runtime_data = WagoRuntimeData(
         serial=serial,
         identity=identity,
         measurements=measurements,
         energy=energy,
+        module=module,
+        module_device_id=_register_module(hass, entry, module),
+        module_api=None if module is None else module_api,
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_read_module(
+    module_api: WagoModule, host: str
+) -> dict[str, Any] | None:
+    """The 879-9000's own settings, or None: the meter works without them."""
+    try:
+        return await module_api.async_read()
+    except ModbusError as err:
+        _LOGGER.debug(
+            "No 879-9000 settings on unit %s: %s",
+            MODULE_UNIT_ID,
+            redact(str(err), host),
+        )
+        return None
+
+
+def _register_module(
+    hass: HomeAssistant, entry: WagoConfigEntry, module: dict[str, Any] | None
+) -> str | None:
+    """Register the module's device ahead of the platforms.
+
+    The meter links to it by registry id, which only exists once the device
+    does.
+    """
+    if module is None:
+        return None
+    devices = dr.async_get(hass)
+    device = devices.async_get_or_create(
+        config_entry_id=entry.entry_id, **module_device_info(module)
+    )
+    # A module that was replaced stays in the registry otherwise, with its
+    # entities, and the search would keep taking its serial for this entry.
+    for stale in dr.async_entries_for_config_entry(devices, entry.entry_id):
+        if stale.model == MODULE_MODEL and stale.id != device.id:
+            devices.async_update_device(stale.id, remove_config_entry_id=entry.entry_id)
+    return device.id
 
 
 async def _async_reload(hass: HomeAssistant, entry: WagoConfigEntry) -> None:

@@ -24,11 +24,15 @@ from custom_components.wago_879.const import (
     DOMAIN,
 )
 from custom_components.wago_879.coordinator import FAILED_POLLS_TOLERATED
+from custom_components.wago_879.discovery import DISCOVERY_INTERVAL
 from custom_components.wago_879.logging_policy import mask
+from custom_components.wago_879.wago_879_api.discovery import FoundModule
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
+
+from .test_module import module_holding
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -387,3 +391,123 @@ async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, 
     )
     assert device.sw_version == "1.34"
     assert device.hw_version == "1.23"
+
+
+MODULE_SERIAL = "033000000001"
+MODULE_NAME = "WAGO Modbus TCP 0001"
+
+
+async def test_the_module_is_its_own_device_with_every_setting(hass, meter):
+    """What the vendor's configuration tool shows, as diagnostics of the
+    module the meter is reached through."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+
+    devices = dr.async_get(hass)
+    module = devices.async_get_device_by_identifier(
+        (DOMAIN, MODULE_SERIAL), entry.entry_id
+    )
+    assert module.name == MODULE_NAME
+    assert module.model == "879-9000"
+    assert module.serial_number == MODULE_SERIAL
+    assert module.sw_version == "1.0.856"
+    meter_device = devices.async_get_device_by_identifier(
+        (DOMAIN, SERIAL), entry.entry_id
+    )
+    assert meter_device.via_device_id == module.id
+
+    registry = er.async_get(hass)
+
+    def state(platform: str, key: str) -> str:
+        entity_id = registry.async_get_entity_id(
+            platform, DOMAIN, f"{MODULE_SERIAL}_{key}"
+        )
+        return hass.states.get(entity_id).state
+
+    assert state("sensor", "hostname") == "Wago-TCP"
+    assert state("sensor", "ip_address") == "192.0.2.4"
+    assert state("sensor", "netmask") == "255.255.255.0"
+    assert state("sensor", "gateway") == "192.0.2.1"
+    assert state("sensor", "dns_server_2") == "192.0.2.1"
+    assert state("sensor", "ntp_server_2") == "0.0.0.0"
+    assert state("sensor", "serial_number") == MODULE_SERIAL
+    assert state("sensor", "bootloader_version") == "1.0.856"
+    assert state("sensor", "modbus_port") == "rs232"
+    assert state("sensor", "baud_rate") == "115200"
+    assert state("sensor", "parity") == "even"
+    assert state("sensor", "timeout") == "3000"
+    assert state("binary_sensor", "dhcp") == "off"
+    assert state("binary_sensor", "ntp") == "on"
+
+
+async def test_a_meter_without_the_module_still_loads(hass):
+    """A gateway other than the 879-9000 has no module registers."""
+    entry = await _setup(hass, _entry(hass))
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert (
+        dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, MODULE_SERIAL), entry.entry_id
+        )
+        is None
+    )
+
+
+async def test_a_gateway_that_refuses_unit_255_still_loads_the_meter(hass, meter):
+    """Another gateway may answer unit 255 with an error instead of zeros."""
+    meter.fail_module_requests(ModbusConnectionError("no such unit"))
+
+    entry = await _setup(hass, _entry(hass))
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.module is None
+
+
+async def test_the_entry_follows_its_module_to_a_new_address(
+    hass, meter, module_search
+):
+    """The search runs at start and then every interval; a module that turns
+    up at another address takes its entry along without the user."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    assert module_search.await_count == 1
+
+    module_search.return_value = [
+        FoundModule(serial_number=MODULE_SERIAL, host="192.0.2.11")
+    ]
+    async_fire_time_changed(hass, dt_util.utcnow() + DISCOVERY_INTERVAL)
+    # Discovery flows run as background tasks.
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert module_search.await_count == 2
+    assert entry.data[CONF_HOST] == "192.0.2.11"
+    assert entry.state is ConfigEntryState.LOADED
+    assert meter.params_seen[-1].host == "192.0.2.11"
+
+
+async def test_a_replaced_module_leaves_the_entry_with_its_entities(hass, meter):
+    """After the meter moved to another module, the old one is no device of
+    this entry any more: its entities would stay, and the search would still
+    take its serial for this entry and move the entry back to it."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    # The replacement module: serial 033000000002.
+    meter.load_module_raw({"holding": {0x040A: 0x0002}})
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    devices = dr.async_get(hass)
+    old = devices.async_get_device_by_identifier(
+        (DOMAIN, MODULE_SERIAL), entry.entry_id
+    )
+    new = devices.async_get_device_by_identifier(
+        (DOMAIN, "033000000002"), entry.entry_id
+    )
+    assert old is None
+    assert new is not None
+    registry = er.async_get(hass)
+    assert (
+        registry.async_get_entity_id("sensor", DOMAIN, f"{MODULE_SERIAL}_hostname")
+        is None
+    )

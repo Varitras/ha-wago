@@ -11,7 +11,7 @@
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
         },
         "data_description": {
-          "host": "IP-Adresse oder Hostname des 879-9000 Modbus-TCP-Moduls.",
+          "host": "IP-Adresse oder Hostname des Modbus-TCP-Moduls 879-9000. Module in Home Assistants eigenen Subnetzen werden aufgelistet; eines in einem anderen Subnetz muss eingetippt werden.",
           "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
           "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1).",
           "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
@@ -30,6 +30,9 @@
           "port": "TCP-Port des Moduls. Modbus TCP nutzt 502, sofern er am Modul nicht geändert wurde.",
           "unit_id": "Modbus-Adresse, die am Zähler selbst eingestellt ist (Werkseinstellung 1)."
         }
+      },
+      "discovery_confirm": {
+        "description": "{name} unter {host} gefunden. Hinzufügen? Der Zähler wird mit Port 502, Unit-ID 1 und den Standard-Abfrageintervallen angelegt."
       }
     },
     "error": {
@@ -42,12 +45,17 @@
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
       "unique_id_mismatch": "Unter dieser Adresse hat ein anderer Zähler geantwortet; der Eintrag wurde nicht geändert.",
-      "reconfigure_successful": "Konfiguration aktualisiert"
-    }
+      "reconfigure_successful": "Konfiguration aktualisiert",
+      "already_in_progress": "Dieser Zähler wird bereits eingerichtet",
+      "cannot_connect": "Der Zähler antwortet nicht",
+      "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
+      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler"
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {
-      "init": {
+      "intervals": {
         "data": {
           "measurement_interval": "Abfrageintervall für Messwerte (Sekunden)",
           "energy_interval": "Abfrageintervall für Energiezähler (Sekunden)"
@@ -56,10 +64,56 @@
           "measurement_interval": "Wie oft Spannung, Strom, Leistung und Leistungsfaktor gelesen werden.",
           "energy_interval": "Wie oft die Energiezähler gelesen werden. Sie ändern sich langsam; ein längeres Intervall hält die Last auf der Modbus-Verbindung gering."
         }
+      },
+      "init": {
+        "menu_options": {
+          "intervals": "Abfrageintervalle",
+          "module": "Moduleinstellungen"
+        }
+      },
+      "module": {
+        "title": "Moduleinstellungen",
+        "description": "Einstellungen des Moduls 879-9000, gerade eben aus ihm gelesen. Speichern schreibt die Änderungen ins Modul, legt sie dort ab und lässt das Modul sie übernehmen. Die serielle Seite bleibt fest auf den Zähler eingestellt und steht auf der Geräteseite des Moduls.\n\nEine neue Adresse oder DHCP verlegt das Modul weg von seiner alten Adresse. Bei fester Adresse zieht der Eintrag mit; bei DHCP findet die Suche das Modul wieder, solange es auf die Suche antwortet.",
+        "data": {
+          "dhcp": "DHCP",
+          "ip_address": "IP-Adresse",
+          "netmask": "Netzmaske",
+          "gateway": "Gateway",
+          "dns_server_1": "DNS-Server 1",
+          "dns_server_2": "DNS-Server 2",
+          "ntp": "Zeitsynchronisation (NTP)",
+          "ntp_server_1": "NTP-Server 1",
+          "ntp_server_2": "NTP-Server 2",
+          "hostname": "Hostname",
+          "timeout": "Modbus-Timeout"
+        },
+        "data_description": {
+          "dhcp": "Adresse von einem DHCP-Server beziehen statt der festen unten.",
+          "ip_address": "Feste Adresse des Moduls. Bleibt für den Fall erhalten, dass DHCP aus ist.",
+          "netmask": "Netzmaske der festen Adresse, zum Beispiel 255.255.255.0.",
+          "gateway": "Router in andere Netze; leer für keinen. Muss im Netz des Moduls liegen.",
+          "dns_server_1": "Leer für keinen.",
+          "dns_server_2": "Leer für keinen.",
+          "ntp": "Die Uhr des Moduls von einem Zeitserver stellen.",
+          "ntp_server_1": "Adresse eines Zeitservers; leer für keinen.",
+          "ntp_server_2": "Adresse eines zweiten Zeitservers; leer für keinen.",
+          "hostname": "Name, mit dem sich das Modul beim DHCP-Server meldet: Buchstaben, Ziffern und Bindestriche, höchstens 31 Zeichen.",
+          "timeout": "Wie lange das Modul auf die Antwort des Zählers wartet."
+        }
       }
     },
     "error": {
-      "not_a_whole_number": "Bitte eine ganze Zahl eingeben"
+      "not_a_whole_number": "Bitte eine ganze Zahl eingeben",
+      "invalid_address": "Eine IPv4-Adresse wie 192.168.1.10 eingeben",
+      "invalid_netmask": "Eine Netzmaske wie 255.255.255.0 eingeben",
+      "invalid_hostname": "Ein Hostname hat höchstens 31 Buchstaben, Ziffern und Bindestriche und beginnt und endet nicht mit einem Bindestrich",
+      "gateway_outside_network": "Das Gateway muss eine andere Adresse im Netz des Moduls sein",
+      "module_write_failed": "Das Modul hat die Einstellungen nicht angenommen. Hat sich seine Adresse geändert, zieht der Eintrag mit, sobald die Suche das Modul findet.",
+      "invalid_timeout": "Einen Timeout zwischen 1 und 65535 ms eingeben"
+    },
+    "abort": {
+      "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden",
+      "module_not_applied": "Das Modul hat die Einstellungen gespeichert, ihre Übernahme aber nicht bestätigt. Es verwendet sie spätestens nach dem nächsten Neustart."
     }
   },
   "entity": {
@@ -393,6 +447,67 @@
       },
       "ct_ratio_secondary": {
         "name": "Wandlerverhältnis sekundär"
+      },
+      "serial_number": {
+        "name": "Seriennummer"
+      },
+      "firmware_version": {
+        "name": "Firmware-Version"
+      },
+      "bootloader_version": {
+        "name": "Bootloader-Version"
+      },
+      "ip_address": {
+        "name": "IP-Adresse"
+      },
+      "netmask": {
+        "name": "Netzmaske"
+      },
+      "gateway": {
+        "name": "Standard-Gateway"
+      },
+      "dns_server_1": {
+        "name": "DNS-Server 1"
+      },
+      "dns_server_2": {
+        "name": "DNS-Server 2"
+      },
+      "ntp_server_1": {
+        "name": "NTP-Server 1"
+      },
+      "ntp_server_2": {
+        "name": "NTP-Server 2"
+      },
+      "hostname": {
+        "name": "Hostname"
+      },
+      "baud_rate": {
+        "name": "Baudrate"
+      },
+      "timeout": {
+        "name": "Modbus-Timeout"
+      },
+      "modbus_port": {
+        "name": "Modbus-Port",
+        "state": {
+          "rs232": "RS-232"
+        }
+      },
+      "parity": {
+        "name": "Parität",
+        "state": {
+          "even": "Gerade",
+          "none": "Keine",
+          "odd": "Ungerade"
+        }
+      }
+    },
+    "binary_sensor": {
+      "dhcp": {
+        "name": "DHCP"
+      },
+      "ntp": {
+        "name": "NTP-Unterstützung"
       }
     }
   },

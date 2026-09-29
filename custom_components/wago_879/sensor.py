@@ -13,7 +13,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
-from .entity_descriptions import SENSOR_DESCRIPTIONS, WagoSensorDescription
+from .entity_descriptions import (
+    MODULE_SENSOR_DESCRIPTIONS,
+    SENSOR_DESCRIPTIONS,
+    WagoSensorDescription,
+)
 from .logging_policy import identifier_tail
 
 # No sensor updates on its own: the coordinators poll, identity is read once.
@@ -21,6 +25,7 @@ PARALLEL_UPDATES = 0
 
 MANUFACTURER = "WAGO"
 MODEL = "879-3000"
+MODULE_MODEL = "879-9000"
 
 
 def device_name(serial: str) -> str:
@@ -65,17 +70,33 @@ def _version(identity: dict[str, Any], field: str) -> str | None:
     return f"{value:.{FLOAT32_SIGNIFICANT_DIGITS}g}"
 
 
-def device_info(serial: str, identity: dict[str, Any]) -> DeviceInfo:
-    """The device card: serial, firmware and hardware version."""
+def module_device_info(module: dict[str, Any]) -> DeviceInfo:
+    """The 879-9000's device card, named after its own serial's tail."""
+    serial = module["serial_number"]
     return DeviceInfo(
         identifiers={(DOMAIN, serial)},
-        name=device_name(serial),
+        name=f"{MANUFACTURER} Modbus TCP {identifier_tail(serial)}",
+        manufacturer=MANUFACTURER,
+        model=MODULE_MODEL,
+        serial_number=serial,
+        sw_version=module["firmware_version"],
+    )
+
+
+def device_info(runtime: WagoRuntimeData) -> DeviceInfo:
+    """The meter's device card, linked to the module it is reached through."""
+    info = DeviceInfo(
+        identifiers={(DOMAIN, runtime.serial)},
+        name=device_name(runtime.serial),
         manufacturer=MANUFACTURER,
         model=MODEL,
-        serial_number=serial,
-        sw_version=_version(identity, "software_version"),
-        hw_version=_version(identity, "hardware_version"),
+        serial_number=runtime.serial,
+        sw_version=_version(runtime.identity, "software_version"),
+        hw_version=_version(runtime.identity, "hardware_version"),
     )
+    if runtime.module_device_id is not None:
+        info["via_device_id"] = runtime.module_device_id
+    return info
 
 
 class WagoPolledSensor(CoordinatorEntity[WagoCoordinator], SensorEntity):
@@ -89,13 +110,13 @@ class WagoPolledSensor(CoordinatorEntity[WagoCoordinator], SensorEntity):
         coordinator: WagoCoordinator,
         description: WagoSensorDescription,
         serial: str,
-        identity: dict[str, Any],
+        device: DeviceInfo,
     ) -> None:
         """Take the first refresh's value; the listener only fires on the next poll."""
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{serial}_{description.key}"
-        self._attr_device_info = device_info(serial, identity)
+        self._attr_device_info = device
         self._attr_native_value = coordinator.data.get(description.key)
 
     @callback
@@ -104,21 +125,25 @@ class WagoPolledSensor(CoordinatorEntity[WagoCoordinator], SensorEntity):
         self.async_write_ha_state()
 
 
-class WagoIdentitySensor(SensorEntity):
-    """A diagnostic value read once at setup."""
+class WagoStaticSensor(SensorEntity):
+    """A diagnostic value read once at setup, of the meter or of the module."""
 
     entity_description: WagoSensorDescription
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(
-        self, description: WagoSensorDescription, serial: str, identity: dict[str, Any]
+        self,
+        description: WagoSensorDescription,
+        serial: str,
+        device: DeviceInfo,
+        values: dict[str, Any],
     ) -> None:
         """Hold the value the setup read."""
         self.entity_description = description
         self._attr_unique_id = f"{serial}_{description.key}"
-        self._attr_device_info = device_info(serial, identity)
-        self._attr_native_value = identity.get(description.key)
+        self._attr_device_info = device
+        self._attr_native_value = values.get(description.key)
 
 
 def _is_populated(description: WagoSensorDescription, runtime: WagoRuntimeData) -> bool:
@@ -133,20 +158,27 @@ def _is_populated(description: WagoSensorDescription, runtime: WagoRuntimeData) 
 def build_entities(runtime: WagoRuntimeData) -> list[Entity]:
     """One entity per description the meter fills, on the poller its block names."""
     entities: list[Entity] = []
+    meter = device_info(runtime)
     for description in SENSOR_DESCRIPTIONS:
         if not _is_populated(description, runtime):
             continue
         coordinator = runtime.coordinator_for(description.block)
         if coordinator is None:
             entities.append(
-                WagoIdentitySensor(description, runtime.serial, runtime.identity)
+                WagoStaticSensor(description, runtime.serial, meter, runtime.identity)
             )
         else:
             entities.append(
-                WagoPolledSensor(
-                    coordinator, description, runtime.serial, runtime.identity
-                )
+                WagoPolledSensor(coordinator, description, runtime.serial, meter)
             )
+    if runtime.module is not None:
+        module = module_device_info(runtime.module)
+        entities.extend(
+            WagoStaticSensor(
+                description, runtime.module["serial_number"], module, runtime.module
+            )
+            for description in MODULE_SENSOR_DESCRIPTIONS
+        )
     return entities
 
 

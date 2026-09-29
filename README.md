@@ -20,6 +20,12 @@ interval; the identity group is read once, when the entry is set up.
 - **Identity** - serial number, meter code, firmware/hardware version, Modbus
   unit id, CT ratio (when the meter reports one), rated current, and a few
   operational counters.
+- **Module** - the 879-9000's own settings, read at setup from its Modbus
+  unit 255: serial number, firmware and bootloader version, DHCP, address,
+  netmask, gateway, DNS and NTP servers, host name, serial port, baud rate,
+  parity and timeout. The module is a device of its own, the meter is linked
+  to it, and every value is a diagnostic entity. Behind another gateway
+  nothing of this appears.
 
 ### Entity visibility
 
@@ -109,7 +115,7 @@ phase voltages, set to *arithmetic mean*.
 
    | Field | What to enter |
    |---|---|
-   | Host | IP address or host name of the 879-9000 module |
+   | Host | IP address or host name of the 879-9000 module; modules found in Home Assistant's subnets are listed |
    | Port | TCP port of the module; 502 unless it was changed there |
    | Modbus unit id | the address set on the meter itself (factory setting 1) |
    | Poll interval for measurements | seconds between reads of voltage, current, power; default 15 |
@@ -119,6 +125,46 @@ phase voltages, set to *arithmetic mean*.
    so a wrong address or unit id is reported right away. Host, port and unit
    id can be changed later with **Reconfigure**, the intervals under
    **Configure**.
+
+## Discovery
+
+The integration searches for 879-9000 modules the way WAGO's
+configuration tool does: a UDP broadcast to port 20000, sent to the
+broadcast addresses of the network adapters enabled under **Settings ->
+System -> Network** (with only the default adapter, that is
+255.255.255.255).
+
+- **When adding the integration**, the host field lists the modules found;
+  an address can still be typed.
+- **In the background**, from the start of Home Assistant - once the
+  integration is loaded, which takes an enabled entry - every 15 minutes
+  until Home Assistant stops:
+  - a module with a meter that is not set up yet appears under **Discovered**
+    (only a meter on port 502 and unit id 1; any other is added by hand).
+    Each module's meter is asked once per run of Home Assistant;
+  - a module that turned up at a new address takes its entry along, once it
+    answers there with its own serial number - the entry's host is updated
+    and the entry reloaded. An entry set up with a host name keeps it.
+
+## Module settings
+
+**Configure -> Module settings** changes the 879-9000's network and Modbus
+settings the way WAGO's configuration tool does: DHCP, address, netmask,
+gateway, DNS and NTP servers, NTP on or off, host name and the Modbus
+timeout. The page reads the module when it opens, and saving writes only
+when something changed - both setting blocks, then "store" and "apply".
+An empty server field means "not set".
+
+- The strict checks apply to what was changed: a value the module already
+  holds, set by another tool, does not block saving something else.
+- The serial side (RS232, 115200 baud, even parity) is fixed to the meter;
+  it is shown on the module's device page, not offered here.
+- A new fixed address, or switching DHCP off, takes the entry along; with
+  DHCP the search finds the module again, as long as it answers the search.
+- When the module stores the settings but does not confirm using them, the
+  page says so; it uses them after its next restart at the latest.
+- Two pages saved at once are written one after the other.
+- The page appears only when the module answered at setup.
 
 ## Migrating from a YAML `modbus:` block
 
@@ -175,7 +221,8 @@ and has no interval:
   power, ...); default 15 seconds.
 - **Energy interval** - the energy counters; default 300 seconds.
 
-Both can be changed from the integration's options, within 5-3600 seconds.
+Both can be changed under **Configure -> Poll intervals**, within 5-3600
+seconds.
 
 A poll that fails keeps the last values; only the fourth failed poll in a row
 marks the entities unavailable, and the next good poll brings them back. A
@@ -183,9 +230,12 @@ meter whose link is down is logged at *info*, not as an error.
 
 ## Known limitations
 
-- **Read-only.** The integration never writes to the meter: switching the
-  tariff, resetting the day counters or changing Modbus settings is not
-  possible from Home Assistant.
+- **The meter is read-only.** Switching the tariff, resetting the day
+  counters or changing the meter's Modbus settings is not possible from Home
+  Assistant; only the 879-9000 module's own settings can be written.
+- **Module settings were checked against one module**, firmware 1.0.856.
+  How long the module takes to use a new address is not known; a write it
+  does not confirm is reported, and the search follows a module that moved.
 - **Only the 4PU variant is tested** (see [Supported devices](#supported-devices)).
 - **CT ratio** is shown as the two raw words the meter sends. The manual
   prints its example in a way that leaves open whether they are decimal or
@@ -198,8 +248,9 @@ meter whose link is down is logged at *info*, not as an error.
 - **At most four Modbus TCP connections** per 879-9000 module, according to
   WAGO's data sheet. Home Assistant uses one per module; every other program
   polling the same module takes one of the remaining three.
-- **No discovery.** The module announces itself to WAGO's own configuration
-  tool only, so it has to be added by address.
+- **Discovery stays within Home Assistant's subnets.** Routers do not pass
+  the search broadcast on; a module in another subnet is added by address.
+  A module leaves some searches unanswered, so each search asks three times.
 
 ## Troubleshooting
 
@@ -215,6 +266,12 @@ meter whose link is down is logged at *info*, not as an error.
 - **"answers as serial ..., but this entry belongs to serial ..."** - a
   different meter answers at the saved address. Use **Reconfigure** to point
   the entry at the right address, or add the other meter as its own entry.
+- **A module is not listed** when adding the integration, or never
+  appears under Discovered - the search only reaches the subnets of the
+  adapters enabled under **Settings -> System -> Network**, and routers do
+  not pass it on. Home Assistant in a container needs host networking, and
+  a firewall on its host has to let in UDP replies from port 20000. Adding
+  the module by its address works regardless.
 - **More detail** - enable debug logging for the integration:
 
   ```yaml

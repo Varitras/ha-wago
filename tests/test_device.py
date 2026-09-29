@@ -80,6 +80,27 @@ async def test_identity_exposes_the_serial_as_hex(unit):
     assert meter.serial_number == "00123456"
 
 
+async def test_whole_number_registers_are_unsigned(unit):
+    """Counters, codes and the CT ratio are never negative; the manual's own
+    example ratio word 0x9995 read signed would come out as -26219."""
+    unit.load_raw(
+        {
+            "holding": {
+                0x4000: 0x0012,
+                0x4001: 0x3456,
+                0x4002: 0x1111,
+                0x4016: 40000,
+                0x401F: 0x9995,
+            }
+        }
+    )
+
+    identity = await WagoMeter(unit).async_read_identity()
+
+    assert identity["power_down_counter"] == 40000
+    assert identity["ct_ratio_primary"] == 0x9995
+
+
 async def test_serial_is_none_before_identity_was_read(unit):
     assert WagoMeter(unit).serial_number is None
 
