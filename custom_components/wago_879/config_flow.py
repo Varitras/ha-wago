@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from modbus_connection import ModbusError, ModbusTcpParams
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant import config_entries
 from homeassistant.components.modbus import async_get_temporary_unit

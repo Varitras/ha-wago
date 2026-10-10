@@ -3,8 +3,8 @@
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
-
 from modbus_connection import ModbusConnectionError
+import probatio as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wago_879.const import (
@@ -24,7 +24,11 @@ from homeassistant.components import network
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.selector import NumberSelector, SelectSelector, TextSelector
 
 from .test_e2e import other_link_settings
@@ -943,3 +947,34 @@ async def test_the_module_page_opens_with_a_timeout_the_form_would_refuse(hass, 
     result = await _save_module(hass, entry, {"hostname": "meter-room"})
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_every_form_reaches_the_frontend(hass, meter, module_search):
+    """The frontend gets each form as the field list Home Assistant builds
+    from its schema; a validator it cannot describe breaks the whole page."""
+    module_search.return_value = [MODULE]
+    entry = await _loaded_with_module(hass, meter)
+    options = await hass.config_entries.options.async_init(entry.entry_id)
+    forms = [
+        await _start(hass),
+        await _reconfigure_form(hass, entry),
+        await hass.config_entries.options.async_configure(
+            options["flow_id"], {"next_step_id": "intervals"}
+        ),
+        await _module_form(hass, entry),
+    ]
+
+    for form in forms:
+        fields = vol.to_field_list(
+            form["data_schema"], custom_serializer=cv.custom_serializer
+        )
+        names = [field["name"] for field in fields]
+        assert names == [str(key) for key in form["data_schema"].schema], form[
+            "step_id"
+        ]
+
+
+async def _reconfigure_form(hass, entry):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
+    )
