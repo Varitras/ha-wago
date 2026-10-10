@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
 
-from modbus_connection import ModbusConnectionError, ModbusTcpParams
+from modbus_connection import ModbusConnectionError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wago_879.const import (
@@ -27,6 +27,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.selector import NumberSelector, SelectSelector, TextSelector
 
+from .test_e2e import other_link_settings
 from .test_module import module_holding
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
@@ -97,7 +98,7 @@ async def test_a_clash_of_link_settings_is_a_form_error(hass):
     """
     holder = MockConfigEntry(domain="other", data={})
     holder.add_to_hass(hass)
-    async_get_unit(hass, holder, ModbusTcpParams(host=HOST, framer="rtu"), 1)
+    async_get_unit(hass, holder, other_link_settings(HOST), 1)
 
     started = await _start(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -210,7 +211,7 @@ async def test_reconfigure_recovers_an_entry_stuck_in_setup_error(hass):
     """
     holder = MockConfigEntry(domain="other", data={})
     holder.add_to_hass(hass)
-    async_get_unit(hass, holder, ModbusTcpParams(host=HOST, framer="rtu"), 1)
+    async_get_unit(hass, holder, other_link_settings(HOST), 1)
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
     entry.add_to_hass(hass)
     assert not await hass.config_entries.async_setup(entry.entry_id)
