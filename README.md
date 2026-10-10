@@ -258,8 +258,8 @@ meter whose link is down is logged at *info*, not as an error.
   (Modbus TCP uses 502) and that the 879-9000 module is reachable from Home
   Assistant; the Modbus unit id has to match the one set on the meter.
 - **"Another integration already uses this address with different link
-  settings"** - another Modbus configuration talks to the same address with a
-  different framer or settings. Remove the duplicate.
+  settings"** - another Modbus configuration talks to the same address and
+  port with other settings, Modbus over TLS for one. Remove the duplicate.
 - **Setup keeps retrying after a migration** - Home Assistant shows a repair
   issue under **Settings -> System -> Repairs** saying what is in the way,
   usually a `modbus:` block that is still loaded.

@@ -9,7 +9,7 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 
 from datetime import timedelta
 
-from modbus_connection import ModbusConnectionError, ModbusTcpParams
+from modbus_connection import ModbusConnectionError, ModbusTlsParams
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -70,6 +70,15 @@ def _enable_custom_integrations(enable_custom_integrations):
 def meter(mock_modbus):
     mock_modbus.load_raw(holding({0x5002: 230.5, 0x6000: 1234.5}))
     return mock_modbus
+
+
+def other_link_settings(host, port=502):
+    """The same endpoint as Modbus TCP at host:port, with other link settings.
+
+    TLS, not an RTU framer: from modbus-connection 4.12 on, RTU over TCP is a
+    serial link with an endpoint of its own and no longer clashes.
+    """
+    return ModbusTlsParams(host=host, port=port)
 
 
 def _entry(hass, data=None, unique_id=SERIAL):
@@ -199,9 +208,7 @@ async def test_a_clash_of_link_settings_is_a_setup_error(hass):
     async_get_unit(
         hass,
         holder,
-        ModbusTcpParams(
-            host=BASE_DATA[CONF_HOST], port=BASE_DATA[CONF_PORT], framer="rtu"
-        ),
+        other_link_settings(BASE_DATA[CONF_HOST], BASE_DATA[CONF_PORT]),
         1,
     )
 
@@ -252,9 +259,7 @@ async def test_a_link_settings_clash_keeps_the_address_out_of_the_log(hass, capl
     async_get_unit(
         hass,
         holder,
-        ModbusTcpParams(
-            host=BASE_DATA[CONF_HOST], port=BASE_DATA[CONF_PORT], framer="rtu"
-        ),
+        other_link_settings(BASE_DATA[CONF_HOST], BASE_DATA[CONF_PORT]),
         1,
     )
     entry = _entry(hass)
