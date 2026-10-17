@@ -1,5 +1,7 @@
 """The config, reconfigure and options flows through the flow manager."""
 
+import asyncio
+
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
@@ -7,6 +9,7 @@ from modbus_connection import ModbusConnectionError
 import probatio as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.wago_879 import config_flow
 from custom_components.wago_879.const import (
     CONF_ENERGY_INTERVAL,
     CONF_HOST,
@@ -475,6 +478,91 @@ async def test_a_module_that_moved_takes_its_entry_along(hass, meter):
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == HOST
     assert entry.state is ConfigEntryState.LOADED
+
+
+def _hold_the_module_check(monkeypatch):
+    """Stop the follow inside its Modbus check until the test lets it go."""
+    started, release = asyncio.Event(), asyncio.Event()
+    check = config_flow._async_module_answers_at
+
+    async def held(hass, module, port):
+        started.set()
+        await release.wait()
+        return await check(hass, module, port)
+
+    monkeypatch.setattr(config_flow, "_async_module_answers_at", held)
+    return started, release
+
+
+async def _entry_on_old_host(hass, meter):
+    meter.load_module_raw(module_holding())
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+    return entry
+
+
+async def test_a_host_name_set_during_the_follow_check_is_kept(
+    hass, meter, monkeypatch
+):
+    """The follow decided on the old address; the user's host name came after."""
+    entry = await _entry_on_old_host(hass, meter)
+    started, release = _hold_the_module_check(monkeypatch)
+    following = hass.async_create_task(_discover(hass))
+    await started.wait()
+
+    reconfigure = await entry.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        reconfigure["flow_id"],
+        {CONF_HOST: "wago-module", CONF_PORT: 502, CONF_UNIT_ID: 1},
+    )
+    release.set()
+    await following
+    await hass.async_block_till_done()
+
+    assert entry.data[CONF_HOST] == "wago-module"
+
+
+async def test_an_entry_deleted_during_the_follow_check_ends_the_follow(
+    hass, meter, monkeypatch
+):
+    entry = await _entry_on_old_host(hass, meter)
+    started, release = _hold_the_module_check(monkeypatch)
+    following = hass.async_create_task(_discover(hass))
+    await started.wait()
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    release.set()
+    result = await following
+
+    assert result["type"] is FlowResultType.ABORT
+
+
+async def test_a_reconfigure_overtaken_by_another_change_changes_nothing(
+    hass, meter, monkeypatch
+):
+    """The follow moved the entry while this reconfigure asked the meter."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    probe = config_flow.probe_serial
+
+    async def overtaken(hass, user_input):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_HOST: "wago-module"}
+        )
+        return await probe(hass, user_input)
+
+    monkeypatch.setattr(config_flow, "probe_serial", overtaken)
+    flow = await entry.start_reconfigure_flow(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {CONF_HOST: "192.0.2.20", CONF_PORT: 502, CONF_UNIT_ID: 1}
+    )
+
+    assert result["reason"] == "entry_changed"
+    assert entry.data[CONF_HOST] == "wago-module"
 
 
 async def test_a_module_reached_by_host_name_keeps_the_name(hass, meter):

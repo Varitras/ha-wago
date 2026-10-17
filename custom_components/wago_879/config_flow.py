@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from ipaddress import ip_address
 import logging
 from typing import Any
@@ -278,9 +278,22 @@ async def _async_module_answers_at(
 
 @callback
 def async_move_entry(
-    hass: HomeAssistant, entry: config_entries.ConfigEntry, data: dict[str, Any]
-) -> None:
-    """Give `entry` new connection data and reload it exactly once."""
+    hass: HomeAssistant,
+    entry_id: str,
+    seen: Mapping[str, Any],
+    changes: dict[str, Any],
+) -> bool:
+    """Apply `changes` to the entry's data and reload it exactly once.
+
+    `seen` is the data the caller decided on before awaiting the meter or the
+    module. Nothing happens, and the answer is False, when the entry was
+    changed or deleted in those seconds: a host name the user just set must
+    not be overwritten with the address the decision was made for.
+    """
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is None or entry.data != seen:
+        return False
+    data = {**entry.data, **changes}
     # Read before the update: the listener runs eagerly inside
     # async_update_entry and its reload unloads the entry, which takes the
     # listener off again.
@@ -300,6 +313,7 @@ def async_move_entry(
         # SETUP_ERROR or NOT_LOADED - the very entry a user moves to repair
         # it - would otherwise stay down while the flow reports success.
         hass.config_entries.async_schedule_reload(entry.entry_id)
+    return True
 
 
 class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -377,12 +391,14 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
+            seen = dict(entry.data)
             errors, serial = await self._validate(user_input)
             if not errors:
                 assert serial is not None
                 await self.async_set_unique_id(serial)
                 self._abort_if_unique_id_mismatch()
-                async_move_entry(self.hass, entry, {**entry.data, **user_input})
+                if not async_move_entry(self.hass, entry.entry_id, seen, user_input):
+                    return self.async_abort(reason="entry_changed")
                 return self.async_abort(reason="reconfigure_successful")
         schema = vol.Schema(_connection_schema(user_input or dict(entry.data)))
         return self.async_show_form(
@@ -435,13 +451,14 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, entry: config_entries.ConfigEntry, module: FoundModule
     ) -> config_entries.ConfigFlowResult:
         """Point a known entry at the address its module was found at."""
-        host = entry.data[CONF_HOST]
+        seen = dict(entry.data)
+        host = seen[CONF_HOST]
         # A host name follows the module through DHCP by itself.
         moves = host != module.host and _is_address(host)
         if moves and await _async_module_answers_at(
-            self.hass, module, int(entry.data[CONF_PORT])
+            self.hass, module, int(seen[CONF_PORT])
         ):
-            async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: module.host})
+            async_move_entry(self.hass, entry.entry_id, seen, {CONF_HOST: module.host})
         return self.async_abort(reason="already_configured")
 
     async def async_step_discovery_confirm(
@@ -596,7 +613,9 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
         # Every write goes to the module's flash.
         if not changes:
             return self._finished()
-        host = self.config_entry.data[CONF_HOST]
+        entry_id = self.config_entry.entry_id
+        seen = dict(self.config_entry.data)
+        host = seen[CONF_HOST]
         try:
             await module_api.async_write(changes)
         except ModbusError as err:
@@ -618,26 +637,37 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
                 "Module settings stored, not confirmed: %s",
                 redact(str(err.__cause__), host),
             )
-            self._follow_module(current, settings)
+            self._follow_module(entry_id, seen, current, settings)
             return self.async_abort(reason="module_not_applied")
-        self._follow_module(current, settings)
+        if self.hass.config_entries.async_get_entry(entry_id) is None:
+            return self.async_abort(reason="entry_changed")
+        self._follow_module(entry_id, seen, current, settings)
         return self._finished()
 
     def _finished(self) -> config_entries.ConfigFlowResult:
         """End the page; the module's settings are no entry options."""
         return self.async_create_entry(data=dict(self.config_entry.options))
 
-    def _follow_module(self, current: dict[str, Any], settings: dict[str, Any]) -> None:
+    def _follow_module(
+        self,
+        entry_id: str,
+        seen: dict[str, Any],
+        current: dict[str, Any],
+        settings: dict[str, Any],
+    ) -> None:
         """Point the entry where the module now is, or reload it in place."""
-        entry = self.config_entry
-        host = entry.data[CONF_HOST]
+        host = seen[CONF_HOST]
         new_address = settings["ip_address"]
         # With DHCP on, the entry reached a lease, not the fixed address the
         # register holds; switched off, the module goes to that fixed address.
         reached_the_module = host == current["ip_address"] or current["dhcp"]
         moves = not settings["dhcp"] and _is_address(host) and host != new_address
-        if moves and reached_the_module:
-            async_move_entry(self.hass, entry, {**entry.data, CONF_HOST: new_address})
+        follows = moves and reached_the_module
+        if follows and async_move_entry(
+            self.hass, entry_id, seen, {CONF_HOST: new_address}
+        ):
+            return
+        if self.hass.config_entries.async_get_entry(entry_id) is None:
             return
         # The device page shows what setup read.
-        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        self.hass.config_entries.async_schedule_reload(entry_id)
