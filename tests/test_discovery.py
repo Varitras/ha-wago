@@ -117,19 +117,31 @@ async def test_a_search_nobody_answers_finds_nothing(quick):
 async def test_a_cancelled_search_closes_its_socket(quick, monkeypatch):
     """The search runs every quarter hour; a socket left open each time it is
     cancelled - at shutdown, say - would pile up."""
-    closed = asyncio.Event()
+    # Held here so only the search can close it, not the garbage collector.
+    transports = []
 
     class Replies(discovery._Replies):
-        def connection_lost(self, exc):
-            closed.set()
+        def connection_made(self, transport):
+            transports.append(transport)
 
     monkeypatch.setattr(discovery, "_Replies", Replies)
-    search = asyncio.create_task(async_browse(["127.0.0.1"], port=9))
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    asked = asyncio.Event()
 
-    search.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await search
+    class Module(asyncio.DatagramProtocol):
+        def datagram_received(self, data, addr):
+            asked.set()
 
-    await asyncio.wait_for(closed.wait(), 1)
+    loop = asyncio.get_running_loop()
+    module, _ = await loop.create_datagram_endpoint(Module, local_addr=("127.0.0.1", 0))
+    port = module.get_extra_info("sockname")[1]
+    search = asyncio.create_task(async_browse(["127.0.0.1"], port=port))
+    try:
+        # Asked once: the search is waiting between its requests.
+        await asyncio.wait_for(asked.wait(), 1)
+        search.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await search
+    finally:
+        module.close()
+
+    assert transports[0].is_closing()
