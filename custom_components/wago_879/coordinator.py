@@ -86,9 +86,11 @@ def _failure(err: Exception, host: str, poller: str) -> UpdateFailed:
     The name is repeated in core's own "Error fetching <name> data" log line,
     but a failed first refresh becomes the entry's setup message, rebuilt from
     this translation alone - without the name it would not say which block
-    failed. A bare timeout is named as such: ``str(TimeoutError())`` is empty.
+    failed. The cycle's own timeout is named as such: ``str(TimeoutError())``
+    is empty. modbus-connection's timeout is a `TimeoutError` too, but it ran
+    on the library's clock and its message says what timed out.
     """
-    if isinstance(err, TimeoutError):
+    if not isinstance(err, ModbusError):
         return UpdateFailed(
             translation_domain=DOMAIN,
             translation_key="read_timed_out",
