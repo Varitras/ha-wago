@@ -83,6 +83,7 @@ OMITTED_FIELDS: frozenset[str] = frozenset(
         "protocol_version",
         "software_version",
         "hardware_version",
+        "data_type",
     }
 )
 

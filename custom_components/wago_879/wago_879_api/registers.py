@@ -63,6 +63,7 @@ class Identity(Component):
     # them, with no scaling applied.
     ct_ratio_primary = _number(0x401F)
     ct_ratio_secondary = _number(0x4020)
+    data_type = _number(0x4026)
 
 
 class Measurements(Component):

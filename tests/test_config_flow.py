@@ -344,6 +344,16 @@ async def test_a_device_that_is_no_wago_879_is_refused(hass, meter):
     assert result["errors"] == {"base": "unsupported_meter"}
 
 
+async def test_a_meter_set_to_send_integers_is_refused(hass, meter):
+    meter.load_raw({"holding": {0x4026: 2}})
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unsupported_data_type"}
+
+
 async def test_reconfigure_retitles_an_entry_still_named_after_its_old_address(hass):
     """Setup retitles an address title only while it equals the saved host. A
     disabled entry reconfigured before its first setup under this version

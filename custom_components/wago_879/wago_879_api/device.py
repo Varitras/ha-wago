@@ -38,6 +38,9 @@ SERIAL_HEX_DIGITS = 8
 # The meter codes the manual (appendix A3.2, register 0x4002) lists for the
 # variants sharing this register map: 4PU, 4PS and 2PU CT.
 SUPPORTED_METER_CODES = frozenset({0x1111, 0x1112, 0x1113})
+# Register 0x4026: 1 is the standard data type, the "Float ABCD" every reading
+# here is decoded as; 2 switches the meter to integers.
+FLOAT_DATA_TYPE = 1
 
 
 class ModuleNotApplied(Exception):
@@ -55,6 +58,15 @@ class UnsupportedMeter(Exception):
         """Keep the code the device reported."""
         super().__init__(f"meter code 0x{meter_code:04X}")
         self.meter_code = meter_code
+
+
+class UnsupportedDataType(Exception):
+    """The meter is set to send its readings in a format other than floats."""
+
+    def __init__(self, data_type: int) -> None:
+        """Keep the data type the meter reported."""
+        super().__init__(f"data type {data_type}")
+        self.data_type = data_type
 
 
 def _values(component: Component, names: tuple[str, ...]) -> dict[str, Any]:
@@ -87,13 +99,16 @@ class WagoMeter:
     async def async_read_identity(self) -> dict[str, Any]:
         """Read the 0x4000 block.
 
-        Raises ModbusError on a link problem and UnsupportedMeter when the
-        device is not one of the meters this register map describes.
+        Raises ModbusError on a link problem, UnsupportedMeter when the
+        device is not one of the meters this register map describes, and
+        UnsupportedDataType when the meter does not send floats.
         """
         await self._identity.async_update()
         values = _values(self._identity, IDENTITY_FIELDS)
         if values["meter_code"] not in SUPPORTED_METER_CODES:
             raise UnsupportedMeter(values["meter_code"])
+        if values["data_type"] != FLOAT_DATA_TYPE:
+            raise UnsupportedDataType(values["data_type"])
         self._serial_number = f"{values['serial_number']:0{SERIAL_HEX_DIGITS}X}"
         return values
 

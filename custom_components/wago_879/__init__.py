@@ -42,7 +42,12 @@ from .coordinator import WagoConfigEntry, WagoCoordinator, WagoRuntimeData
 from .discovery import async_start_discovery
 from .logging_policy import mask, redact
 from .sensor import MODULE_MODEL, entry_title, module_device_info
-from .wago_879_api.device import UnsupportedMeter, WagoMeter, WagoModule
+from .wago_879_api.device import (
+    UnsupportedDataType,
+    UnsupportedMeter,
+    WagoMeter,
+    WagoModule,
+)
 from .wago_879_api.registers import MODULE_UNIT_ID
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -116,6 +121,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
             translation_domain=DOMAIN,
             translation_key="unsupported_meter",
             translation_placeholders={"meter_code": f"0x{err.meter_code:04X}"},
+        ) from None
+    except UnsupportedDataType as err:
+        # A setting on the meter: the user changes it, then reloads the entry.
+        raise ConfigEntryError(
+            translation_domain=DOMAIN,
+            translation_key="unsupported_data_type",
+            translation_placeholders={"data_type": str(err.data_type)},
         ) from None
     serial = meter.serial_number
     assert serial is not None

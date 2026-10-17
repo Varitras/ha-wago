@@ -12,6 +12,7 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 from modbus_connection import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
 
+from custom_components.wago_879.wago_879_api.device import FLOAT_DATA_TYPE
 from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 
 pytest_plugins = ("pytest_homeassistant_custom_component",)
@@ -66,7 +67,8 @@ class SharedMockModbus:
     def __init__(self) -> None:
         self.params_seen: list = []
         self.connections: list[MockModbusConnection] = []
-        self._raw: dict = {"holding": {}}
+        # A meter in its standard mode, as every meter leaves the factory.
+        self._raw: dict = {"holding": {0x4026: FLOAT_DATA_TYPE}}
         self._module_raw: dict = {"holding": {}}
         self._module_failure: Exception | None = None
         self._request_failure: Exception | None = None

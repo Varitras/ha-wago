@@ -407,6 +407,17 @@ async def test_setup_refuses_a_device_that_is_no_wago_879(hass, meter):
     assert "0x9999" in entry.reason
 
 
+async def test_setup_refuses_a_meter_set_to_send_integers(hass, meter):
+    """Its counters would read as tiny numbers - a reset to the statistics."""
+    meter.load_raw({"holding": {0x4026: 2}})
+    entry = _entry(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert "data type 2" in entry.reason
+
+
 async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, meter):
     """The versions arrive as float32: 1.34 decodes to 1.340000033378601."""
     meter.load_raw(holding({0x4007: 1.34, 0x4009: 1.23}))

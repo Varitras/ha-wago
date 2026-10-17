@@ -53,6 +53,7 @@ from .sensor import MODULE_MODEL, device_name, entry_title
 from .wago_879_api.device import (
     WORD_RANGE,
     ModuleNotApplied,
+    UnsupportedDataType,
     UnsupportedMeter,
     WagoMeter,
     WagoModule,
@@ -202,6 +203,8 @@ async def probe_serial(
         return None, "cannot_connect"
     except UnsupportedMeter:
         return None, "unsupported_meter"
+    except UnsupportedDataType:
+        return None, "unsupported_data_type"
     except HomeAssistantError:
         # The only HomeAssistantError the helper raises: another consumer holds
         # this endpoint with link settings that cannot both be honoured. The

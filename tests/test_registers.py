@@ -89,6 +89,7 @@ IDENTITY_MANUAL_ADDRESSES = {
     # Manual page 38 writes 0x401F as two words, primary then secondary.
     "ct_ratio_primary": 0x401F,
     "ct_ratio_secondary": 0x4020,
+    "data_type": 0x4026,
 }
 
 
