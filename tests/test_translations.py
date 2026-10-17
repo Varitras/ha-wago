@@ -197,6 +197,15 @@ def test_the_translation_scan_catches_the_shapes_it_was_written_for():
 
 # Which strings.json section a flow class's messages live in.
 FLOW_SECTIONS = {"WagoConfigFlow": "config", "WagoOptionsFlow": "options"}
+# Core's helpers that abort a flow with a reason of their own.
+IMPLICIT_ABORTS = {
+    "_abort_if_unique_id_configured": "already_configured",
+    "_abort_if_unique_id_mismatch": "unique_id_mismatch",
+    "async_set_unique_id": "already_in_progress",
+}
+# Messages held in a variable: `error` is what probe_serial returned or what
+# module_settings refused, and both producers are scanned themselves.
+UNRESOLVED_ALLOWED = {"error"}
 
 
 def _text(node: ast.expr, constants: dict[str, str]) -> str | None:
@@ -221,19 +230,30 @@ def _constants(tree: ast.Module) -> dict[str, str]:
 
 
 def _flow_messages_in(node: ast.AST, constants: dict[str, str]):
-    """(kind, key) for every abort reason and form error `node` names."""
+    """(kind, key) for every abort reason and form error `node` names.
+
+    A message the scan cannot read comes back as ("unresolved", its source),
+    so it is answered for instead of skipped.
+    """
+
+    def message(kind: str, value: ast.expr) -> tuple[str, str]:
+        text = _text(value, constants)
+        if text is None:
+            return "unresolved", ast.unparse(value)
+        return kind, text
+
     for child in ast.walk(node):
-        if isinstance(child, ast.Call) and getattr(child.func, "attr", "") == (
-            "async_abort"
-        ):
+        called = getattr(child.func, "attr", "") if isinstance(child, ast.Call) else ""
+        if called in IMPLICIT_ABORTS:
+            yield "abort", IMPLICIT_ABORTS[called]
+        if called == "async_abort":
             for keyword in child.keywords:
-                if keyword.arg == "reason" and _text(keyword.value, constants):
-                    yield "abort", _text(keyword.value, constants)
+                if keyword.arg == "reason":
+                    yield message("abort", keyword.value)
         if isinstance(child, ast.Dict):
             for key, value in zip(child.keys, child.values, strict=True):
-                is_base = isinstance(key, ast.Constant) and key.value == "base"
-                if is_base and _text(value, constants):
-                    yield "error", _text(value, constants)
+                if isinstance(key, ast.Constant) and key.value == "base":
+                    yield message("error", value)
         if isinstance(child, ast.Assign):
             target = child.targets[0]
             is_base = (
@@ -241,8 +261,8 @@ def _flow_messages_in(node: ast.AST, constants: dict[str, str]):
                 and isinstance(target.slice, ast.Constant)
                 and target.slice.value == "base"
             )
-            if is_base and _text(child.value, constants):
-                yield "error", _text(child.value, constants)
+            if is_base:
+                yield message("error", child.value)
 
 
 def _flow_messages(source: str):
@@ -285,9 +305,17 @@ def test_every_flow_error_and_abort_reason_has_a_text(language):
     missing = [
         f"{section}.{kind}.{key}"
         for section, kind, key in sorted(_package_flow_messages())
-        if key not in strings[section].get(kind, {})
+        if kind != "unresolved" and key not in strings[section].get(kind, {})
     ]
     assert not missing, f"{language.name}: {missing}"
+
+
+def test_every_flow_message_the_scan_cannot_read_is_accounted_for():
+    unresolved = {
+        key for _, kind, key in _package_flow_messages() if kind == "unresolved"
+    }
+
+    assert unresolved <= UNRESOLVED_ALLOWED
 
 
 def test_the_flow_message_scan_finds_every_shape_it_reads():
@@ -302,6 +330,8 @@ def test_the_flow_message_scan_finds_every_shape_it_reads():
         ("options", "error", "invalid_timeout"),
         ("config", "error", "unsupported_data_type"),
         ("config", "abort", "unsupported_data_type"),
+        ("config", "abort", "unique_id_mismatch"),
+        ("config", "abort", "already_in_progress"),
     } <= found
 
 
