@@ -285,10 +285,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> Non
 async def async_migrate_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool:
     """1.1 -> 1.2: the poll intervals move from data to options.
 
-    Options set since win - they are what the user chose last.
+    Options set since win - they are what the user chose last. Core refuses
+    an entry from a newer major version before it gets here.
     """
-    if entry.version > 1:
-        return False
     if entry.minor_version < INTERVALS_IN_OPTIONS_MINOR_VERSION:
         data = dict(entry.data)
         moved = {key: data.pop(key) for key in INTERVAL_FIELDS if key in data}
