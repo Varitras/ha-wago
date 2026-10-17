@@ -856,6 +856,20 @@ async def test_a_stale_module_page_does_not_undo_another_page_s_change(hass, met
     assert values["timeout"] == 2500
 
 
+async def test_a_module_without_a_host_name_can_still_be_saved(hass, meter):
+    """The frontend leaves an empty field out of what it sends; a required
+    one it refuses to send at all."""
+    no_name = {address: 0 for address in range(0x0073, 0x0083)}
+    entry = await _loaded_with_module(hass, meter, no_name)
+    result = await _module_form(hass, entry)
+    sent = {**result_defaults(result), "timeout": 2500}
+    del sent["hostname"]
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], sent)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_a_module_gone_silent_ends_the_page(hass, meter):
     """The page shows what the module holds now, not what setup read; with
     no answer there is nothing true to show."""

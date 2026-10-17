@@ -482,7 +482,9 @@ def _module_schema() -> vol.Schema:
             vol.Required("ntp"): BooleanSelector(),
             vol.Optional("ntp_server_1"): address,
             vol.Optional("ntp_server_2"): address,
-            vol.Required("hostname"): TextSelector(),
+            # Optional: the frontend withholds a required field left empty,
+            # and a module may hold no name.
+            vol.Optional("hostname"): TextSelector(),
             # The whole word: module_settings refuses a new 0, while one the
             # module already holds has to reach the page and go back.
             vol.Required("timeout"): NumberSelector(
