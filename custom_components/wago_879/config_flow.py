@@ -599,6 +599,9 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
             await module_api.async_write(changes)
         except ModbusError as err:
             _LOGGER.debug("Module settings not written: %s", redact(str(err), host))
+            # Part of the write may have reached the module's blocks, so the
+            # next save compares with a fresh read, not with the page as opened.
+            self._module_values = None
             return self.async_show_form(
                 step_id="module",
                 data_schema=self.add_suggested_values_to_schema(

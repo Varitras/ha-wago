@@ -795,6 +795,67 @@ async def test_a_write_the_module_refuses_is_a_form_error(hass, meter):
     assert result["errors"] == {"base": "module_write_failed"}
 
 
+def _network_writes(writes):
+    return [write.values for write in writes if write.address == 0x0064]
+
+
+async def _fail_one_store(hass, meter, entry, changes):
+    """A page whose write reached the module's blocks but not its store."""
+    result = await _module_form(hass, entry)
+    unit = meter.connections[-1].for_unit(MODULE_UNIT_ID)
+    unit.fail_write(0x03F2, ModbusConnectionError("down"))
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **changes}
+    )
+    assert result["errors"] == {"base": "module_write_failed"}
+    unit.fail_write(0x03F2, None)
+    return result
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"hostname": "meter-room"}, {}],
+    ids=["another field changed", "nothing else changed"],
+)
+async def test_a_field_set_back_after_a_failed_write_is_written_back(
+    hass, meter, changes
+):
+    """The failed write left the new address in the module's blocks; the
+    next save compares with those, not with the page as it opened."""
+    entry = await _loaded_with_module(hass, meter)
+    result = await _fail_one_store(hass, meter, entry, {"ip_address": "192.0.2.11"})
+    writes = _module_writes(meter)
+
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **changes}
+    )
+    await hass.async_block_till_done()
+
+    # HOST, 192.0.2.10, in the first two words of the network block.
+    assert _network_writes(writes)[-1][0:2] == [0xC000, 0x020A]
+    assert entry.data[CONF_HOST] == HOST
+
+
+async def test_a_stale_module_page_does_not_undo_another_page_s_change(hass, meter):
+    """Only what a page changed is written; the rest is what the module holds."""
+    entry = await _loaded_with_module(hass, meter)
+    first = await _module_form(hass, entry)
+    second = await _module_form(hass, entry)
+
+    await hass.config_entries.options.async_configure(
+        first["flow_id"], {**result_defaults(first), "timeout": 2500}
+    )
+    await hass.async_block_till_done()
+    await hass.config_entries.options.async_configure(
+        second["flow_id"], {**result_defaults(second), "hostname": "meter-room"}
+    )
+    await hass.async_block_till_done()
+
+    values = await entry.runtime_data.module_api.async_read()
+    assert values["hostname"] == "meter-room"
+    assert values["timeout"] == 2500
+
+
 async def test_a_module_gone_silent_ends_the_page(hass, meter):
     """The page shows what the module holds now, not what setup read; with
     no answer there is nothing true to show."""
