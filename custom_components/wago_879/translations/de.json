@@ -40,7 +40,8 @@
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
       "invalid_host": "Hostname oder IP-Adresse eingeben",
       "not_a_whole_number": "Bitte eine ganze Zahl eingeben",
-      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler"
+      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler",
+      "unsupported_data_type": "Der Zähler steht nicht auf dem Standard-Datentyp (Float); stelle ihn zurück und versuche es erneut"
     },
     "abort": {
       "already_configured": "Dieser Zähler ist bereits eingerichtet",
@@ -49,7 +50,9 @@
       "already_in_progress": "Dieser Zähler wird bereits eingerichtet",
       "cannot_connect": "Der Zähler antwortet nicht",
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
-      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler"
+      "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler",
+      "unsupported_data_type": "Der Zähler steht nicht auf dem Standard-Datentyp (Float); stelle ihn zurück und versuche es erneut",
+      "entry_changed": "Der Eintrag wurde inzwischen geändert oder gelöscht, daher wurde nichts geändert."
     },
     "flow_title": "{name}"
   },
@@ -113,7 +116,8 @@
     },
     "abort": {
       "module_not_answering": "Das Modul antwortet nicht; seine Einstellungen können nicht angezeigt werden",
-      "module_not_applied": "Das Modul hat die Einstellungen gespeichert, ihre Übernahme aber nicht bestätigt. Es verwendet sie spätestens nach dem nächsten Neustart."
+      "module_not_applied": "Das Modul hat die Einstellungen gespeichert, ihre Übernahme aber nicht bestätigt. Es verwendet sie spätestens nach dem nächsten Neustart.",
+      "entry_changed": "Der Eintrag wurde gelöscht, während die Moduleinstellungen geschrieben wurden; das Modul behält die neuen Einstellungen."
     }
   },
   "entity": {
@@ -541,6 +545,9 @@
     },
     "unsupported_meter": {
       "message": "Das Gerät meldet den Meter-Code {meter_code}; das ist keine von dieser Integration unterstützte WAGO-879-3000-Variante (4PU, 4PS, 2PU CT)."
+    },
+    "unsupported_data_type": {
+      "message": "Der Zähler steht auf Datentyp {data_type}. Diese Integration liest nur den Standard-Datentyp (Float); stelle den Zähler darauf zurück und lade den Eintrag dann neu."
     }
   },
   "issues": {

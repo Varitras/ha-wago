@@ -7,10 +7,16 @@ from modbus_connection import ModbusConnectionError
 from modbus_connection.mock import MockModbusConnection
 import pytest
 
-from custom_components.wago_879.wago_879_api.device import UnsupportedMeter, WagoMeter
+from custom_components.wago_879.wago_879_api.device import (
+    FLOAT_DATA_TYPE,
+    UnsupportedDataType,
+    UnsupportedMeter,
+    WagoMeter,
+)
 from custom_components.wago_879.wago_879_api.registers import (
     ENERGY_FIELDS,
     MEASUREMENT_FIELDS,
+    STATUS_FIELDS,
 )
 
 
@@ -34,7 +40,10 @@ def _holding(values: dict[int, float | int]) -> dict[str, dict[int, int]]:
 @pytest.fixture
 def unit():
     connection = MockModbusConnection()
-    return connection.for_unit(1)
+    unit = connection.for_unit(1)
+    # A meter in its standard mode, as every meter leaves the factory.
+    unit.load_raw({"holding": {0x4026: FLOAT_DATA_TYPE}})
+    return unit
 
 
 async def test_measurements_come_back_keyed_by_field(unit):
@@ -43,7 +52,7 @@ async def test_measurements_come_back_keyed_by_field(unit):
 
     values = await meter.async_update_measurements()
 
-    assert set(values) == set(MEASUREMENT_FIELDS)
+    assert set(values) == {*MEASUREMENT_FIELDS, *STATUS_FIELDS}
     assert values["voltage_l1"] == pytest.approx(230.5)
     assert values["active_power_total"] == pytest.approx(1.25)
 
@@ -94,10 +103,12 @@ async def test_whole_number_registers_are_unsigned(unit):
             }
         }
     )
+    meter = WagoMeter(unit)
 
-    identity = await WagoMeter(unit).async_read_identity()
+    identity = await meter.async_read_identity()
+    measurements = await meter.async_update_measurements()
 
-    assert identity["power_down_counter"] == 40000
+    assert measurements["power_down_counter"] == 40000
     assert identity["ct_ratio_primary"] == 0x9995
 
 
@@ -139,4 +150,18 @@ async def test_a_meter_code_the_manual_does_not_list_is_refused(unit):
     with pytest.raises(UnsupportedMeter) as caught:
         await meter.async_read_identity()
     assert caught.value.meter_code == 0x9999
+    assert meter.serial_number is None
+
+
+async def test_a_meter_set_to_send_integers_is_refused(unit):
+    """Every reading is decoded as a float; read as one, an integer comes out
+    as a tiny number and a counter as a reset."""
+    unit.load_raw(
+        {"holding": {0x4000: 0x0012, 0x4001: 0x3456, 0x4002: 0x1111, 0x4026: 2}}
+    )
+    meter = WagoMeter(unit)
+
+    with pytest.raises(UnsupportedDataType) as caught:
+        await meter.async_read_identity()
+    assert caught.value.data_type == 2
     assert meter.serial_number is None

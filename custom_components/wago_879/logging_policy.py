@@ -8,6 +8,7 @@ share this one masking function instead of each site deciding for itself.
 from __future__ import annotations
 
 import logging
+import re
 
 from modbus_connection import ModbusConnectionError
 
@@ -51,11 +52,14 @@ def redact(text: str, identifier: str) -> str:
     For messages this integration did not write: modbus-connection says
     "could not connect to {host}:{port}", core's link-settings clash repeats the
     endpoint in every form it has. Both are worth showing, neither with the
-    address in it.
+    address in it. Case is ignored: modbus-connection lower-cases the host it
+    names, while the entry keeps it as typed.
     """
     if not identifier:
         return text
-    return text.replace(identifier, mask(identifier))
+    masked = mask(identifier)
+    pattern = re.compile(re.escape(identifier), re.IGNORECASE)
+    return pattern.sub(lambda _match: masked, text)
 
 
 class DeviceUnreachable(UpdateFailed):

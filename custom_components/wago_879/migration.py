@@ -169,8 +169,9 @@ async def async_adopt_legacy_entities(
             # Unreachable through `_resolve`, kept because the alternative to
             # noticing here is silently orphaning years of statistics. Undo
             # before raising: the legacy entry is deleted rather than gone, so
-            # re-creating it restores its entity id and the next attempt starts
-            # from the state this one found.
+            # re-creating it restores its entity id. The removed new entry
+            # stays a deleted entry of this config entry, in the way of the
+            # next attempt.
             registry.async_remove(created.entity_id)
             restored = registry.async_get_or_create(
                 Platform.SENSOR, LEGACY_PLATFORM, adoption.legacy.unique_id

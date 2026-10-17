@@ -4,7 +4,11 @@ import asyncio
 from datetime import timedelta
 import logging
 
-from modbus_connection import IllegalDataAddressError, ModbusConnectionError
+from modbus_connection import (
+    IllegalDataAddressError,
+    ModbusConnectionError,
+    ModbusTimeoutError,
+)
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
@@ -12,13 +16,14 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wago_879 import coordinator as coordinator_module
-from custom_components.wago_879.const import DOMAIN
+from custom_components.wago_879.const import CONF_HOST, DOMAIN
 from custom_components.wago_879.coordinator import (
     FAILED_POLLS_TOLERATED,
     WagoCoordinator,
     WagoRuntimeData,
 )
 from custom_components.wago_879.entity_descriptions import Block
+from custom_components.wago_879.logging_policy import mask
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 
@@ -163,6 +168,31 @@ async def test_a_slow_read_before_any_value_raises_with_timeout_wording(
     assert caught.value.translation_placeholders == {
         "poller": "test",
         "seconds": "0.01",
+    }
+
+
+async def test_a_library_timeout_keeps_the_library_message_not_the_cycle_timeout(
+    hass,
+):
+    """modbus-connection's timeout is also a `TimeoutError`, but it gave up on
+    its own clock and says what it gave up on."""
+    host = "192.0.2.10"
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: host})
+    entry.add_to_hass(hass)
+    reader = Reader()
+    reader.fail = True
+    reader.error = ModbusTimeoutError(f"could not connect to {host}:502")
+    poller = WagoCoordinator(
+        hass, entry, name="test", read=reader, interval=timedelta(seconds=15)
+    )
+
+    with pytest.raises(UpdateFailed) as caught:
+        await poller._async_update_data()
+
+    assert caught.value.translation_key == "read_failed"
+    assert caught.value.translation_placeholders == {
+        "poller": "test",
+        "error": f"could not connect to {mask(host)}:502",
     }
 
 

@@ -33,7 +33,12 @@ from homeassistant.const import (
 )
 
 from .wago_879_api.device import MODULE_SWITCHES, PARITIES, PORTS
-from .wago_879_api.registers import ENERGY_FIELDS, IDENTITY_FIELDS, MEASUREMENT_FIELDS
+from .wago_879_api.registers import (
+    ENERGY_FIELDS,
+    IDENTITY_FIELDS,
+    MEASUREMENT_FIELDS,
+    STATUS_FIELDS,
+)
 
 
 class Block(StrEnum):
@@ -83,6 +88,8 @@ OMITTED_FIELDS: frozenset[str] = frozenset(
         "protocol_version",
         "software_version",
         "hardware_version",
+        "data_type",
+        "combination_code",
     }
 )
 
@@ -131,10 +138,12 @@ def _is_directed(field: str) -> bool:
     """Whether the register counts in one direction only.
 
     Import, export and the four quadrants each accumulate their own share and
-    only ever rise. Every other energy register holds import minus export -
-    measured on a meter: reactive_energy_total -1206.637 against import 652.664
-    and export 1859.300 - so it falls, goes negative, and is not a rising
-    counter however much its name says "total".
+    only ever rise. What every other energy register holds is set by the
+    meter's combination code: import minus export as the meter this was
+    measured on keeps it - reactive_energy_total -1206.637 against import
+    652.664 and export 1859.300 - so it falls, goes negative, and is not a
+    rising counter however much its name says "total". The other codes make it
+    a sum or one direction only, which `TOTAL` describes just as well.
     """
     return (
         "import" in field
@@ -208,13 +217,23 @@ def _identity(field: str) -> WagoSensorDescription:
             "ct_ratio_primary",
             "ct_ratio_secondary",
             "modbus_id",
-            "current_quadrant",
         },
+    )
+
+
+def _status(field: str) -> WagoSensorDescription:
+    return WagoSensorDescription(
+        key=field,
+        translation_key=field,
+        block=Block.MEASUREMENTS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=field == "current_quadrant",
     )
 
 
 SENSOR_DESCRIPTIONS: tuple[WagoSensorDescription, ...] = (
     *(_measurement(f) for f in MEASUREMENT_FIELDS),
+    *(_status(f) for f in STATUS_FIELDS),
     *(_energy(f) for f in ENERGY_FIELDS),
     *(_identity(f) for f in IDENTITY_FIELDS if f not in OMITTED_FIELDS),
 )

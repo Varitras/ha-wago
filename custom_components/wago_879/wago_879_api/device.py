@@ -8,7 +8,14 @@ from ipaddress import IPv4Address
 import math
 from typing import Any
 
-from modbus_connection import ModbusError, ModbusUnit
+from modbus_connection import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    IllegalDataAddressError,
+    IllegalFunctionError,
+    ModbusError,
+    ModbusUnit,
+)
 from modbus_connection.encode import encode_string
 from modbus_connection.model import Component
 from modbus_connection.model.fields import IPv4Field, RegisterField, StringField
@@ -25,12 +32,14 @@ from .registers import (
     MODULE_SETTINGS_WORDS,
     MODULE_STORE_COMMAND,
     SERIAL_WORDS,
+    STATUS_FIELDS,
     Energy,
     Identity,
     Measurements,
     ModuleNetwork,
     ModuleSettings,
     ModuleVersion,
+    Status,
 )
 
 SERIAL_HEX_DIGITS = 8
@@ -38,6 +47,9 @@ SERIAL_HEX_DIGITS = 8
 # The meter codes the manual (appendix A3.2, register 0x4002) lists for the
 # variants sharing this register map: 4PU, 4PS and 2PU CT.
 SUPPORTED_METER_CODES = frozenset({0x1111, 0x1112, 0x1113})
+# Register 0x4026: 1 is the standard data type, the "Float ABCD" every reading
+# here is decoded as; 2 switches the meter to integers.
+FLOAT_DATA_TYPE = 1
 
 
 class ModuleNotApplied(Exception):
@@ -55,6 +67,15 @@ class UnsupportedMeter(Exception):
         """Keep the code the device reported."""
         super().__init__(f"meter code 0x{meter_code:04X}")
         self.meter_code = meter_code
+
+
+class UnsupportedDataType(Exception):
+    """The meter is set to send its readings in a format other than floats."""
+
+    def __init__(self, data_type: int) -> None:
+        """Keep the data type the meter reported."""
+        super().__init__(f"data type {data_type}")
+        self.data_type = data_type
 
 
 def _values(component: Component, names: tuple[str, ...]) -> dict[str, Any]:
@@ -76,6 +97,7 @@ class WagoMeter:
         """Bind the components to the unit; nothing is read yet."""
         self._identity = Identity(unit)
         self._measurements = Measurements(unit)
+        self._status = Status(unit)
         self._energy = Energy(unit)
         self._serial_number: str | None = None
 
@@ -87,20 +109,30 @@ class WagoMeter:
     async def async_read_identity(self) -> dict[str, Any]:
         """Read the 0x4000 block.
 
-        Raises ModbusError on a link problem and UnsupportedMeter when the
-        device is not one of the meters this register map describes.
+        Raises ModbusError on a link problem, UnsupportedMeter when the
+        device is not one of the meters this register map describes, and
+        UnsupportedDataType when the meter does not send floats.
         """
         await self._identity.async_update()
         values = _values(self._identity, IDENTITY_FIELDS)
         if values["meter_code"] not in SUPPORTED_METER_CODES:
             raise UnsupportedMeter(values["meter_code"])
+        if values["data_type"] != FLOAT_DATA_TYPE:
+            raise UnsupportedDataType(values["data_type"])
         self._serial_number = f"{values['serial_number']:0{SERIAL_HEX_DIGITS}X}"
         return values
 
     async def async_update_measurements(self) -> dict[str, Any]:
-        """Read the 0x5000 block; raises ModbusError on a link problem."""
+        """Read the 0x5000 block and the status words.
+
+        Raises ModbusError on a link problem.
+        """
         await self._measurements.async_update()
-        return _values(self._measurements, MEASUREMENT_FIELDS)
+        await self._status.async_update()
+        return {
+            **_values(self._measurements, MEASUREMENT_FIELDS),
+            **_values(self._status, STATUS_FIELDS),
+        }
 
     async def async_update_energy(self) -> dict[str, Any]:
         """Read the 0x6000 block; raises ModbusError on a link problem."""
@@ -129,6 +161,15 @@ HEX_DIGITS_PER_WORD = 4
 WORD_RANGE = 0x10000
 # What the tool writes to a command register to run the command.
 COMMAND_RUN = 1
+# Exception responses to the version read that answer the question: whoever
+# sits at the address serves no 879-9000 on its unit. A timeout, a lost link
+# or "busy" leave it open.
+NO_MODULE_ANSWERS = (
+    IllegalFunctionError,
+    IllegalDataAddressError,
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+)
 
 # Two groups of the keys async_read reports, for whoever treats them alike:
 # on/off switches, and servers the module talks to (0.0.0.0 when not set).
@@ -182,9 +223,13 @@ class WagoModule:
     async def async_read(self) -> dict[str, Any] | None:
         """Everything the configuration tool shows, None for another gateway.
 
-        Raises ModbusError when unit 255 does not answer at all.
+        Raises ModbusError when it stays open whether the module is there:
+        no answer, or a refusal after the module named itself.
         """
-        await self._version.async_update()
+        try:
+            await self._version.async_update()
+        except NO_MODULE_ANSWERS:
+            return None
         if self._version.device_type != MODULE_DEVICE_TYPE:
             return None
         await self._settings.async_update()

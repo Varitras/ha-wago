@@ -13,13 +13,14 @@ Three groups of registers. The two measured groups each have their own poll
 interval; the identity group is read once, when the entry is set up.
 
 - **Measurements** - per-phase and total voltage, current, frequency, active,
-  reactive and apparent power, power factor.
+  reactive and apparent power, power factor; with them the status words:
+  current quadrant, phase quadrants and power-down counter.
 - **Energy** - total, per-phase and per-tariff (T1-T4) active and reactive
   energy counters, the reactive-only per-quadrant (Q1-Q4) split, and the
   running day counters (total and per phase).
 - **Identity** - serial number, meter code, firmware/hardware version, Modbus
-  unit id, CT ratio (when the meter reports one), rated current, and a few
-  operational counters.
+  unit id, CT ratio (when the meter reports one), rated current, data type
+  and combination code.
 - **Module** - the 879-9000's own settings, read at setup from its Modbus
   unit 255: serial number, firmware and bootloader version, DHCP, address,
   netmask, gateway, DNS and NTP servers, host name, serial port, baud rate,
@@ -33,11 +34,13 @@ interval; the identity group is read once, when the entry is set up.
 |---|---|---|
 | Measurements (voltage, current, frequency, power, power factor) | enabled | regular sensors |
 | Energy: import and export counters and their per-phase splits | enabled | `total_increasing`, kept in kWh/kvarh to match the statistics already recorded by the replaced YAML setup |
-| Energy: netted totals (import minus export) and their per-phase splits | enabled | `total`, because a feed-in surplus makes them fall or go negative; same kWh/kvarh units |
+| Energy: totals and their per-phase splits | enabled | `total`: what they count is set by the meter's combination code - import minus export on the tested meter, so a feed-in surplus makes them fall or go negative; other codes count the sum or one direction only. The code is in the diagnostics download (`combination_code`). Same kWh/kvarh units |
 | Energy: per-tariff (T1-T4) and reactive per-quadrant (Q1-Q4) split counters, day counters (total and per phase) | **disabled by default** | a direct-connected meter without tariff switching holds zero in most of these; enable per entity if needed |
 | Energy: `tariff` (the active tariff word) | enabled, **diagnostic** | |
-| Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
-| Identity: CT ratio, Modbus unit id, current quadrant | enabled, **diagnostic** | |
+| Identity: rated current | **disabled by default**, diagnostic | rarely useful day to day |
+| Identity: CT ratio, Modbus unit id | enabled, **diagnostic** | |
+| Status: power-down counter, phase quadrants | **disabled by default**, diagnostic | polled with the measurements |
+| Status: current quadrant | enabled, **diagnostic** | polled with the measurements |
 
 Voltage average, current average and the CT ratio sit on registers the WAGO
 manual shades grey; a direct-measuring meter leaves them at zero. They are
@@ -61,15 +64,17 @@ read at setup but not surfaced.
   4PU, 4PS and 2PU CT variants; a variant that fills registers the 4PU leaves
   empty gets the matching sensors (voltage and current average, CT ratio),
   see [Entity visibility](#entity-visibility). Setup refuses a device whose
-  meter code is none of these three variants.
+  meter code is none of these three variants, and a meter set to a data type
+  other than the standard one (float).
 - **Not supported:** other WAGO meters, other Modbus RTU devices behind the
-  module's RS-485 port, and the 879-9000 over Modbus RTU.
+  module's RS232 port, and the 879-9000 over Modbus RTU.
 
 ## Use cases
 
 - **Energy dashboard** - use *Active energy import* as grid consumption and
-  *Active energy export* as return to grid. The netted *Active energy total*
-  can fall, so it is not the right source for the dashboard.
+  *Active energy export* as return to grid. *Active energy total* follows
+  the meter's combination code and can fall, so it is not the right source
+  for the dashboard.
 - **Phase balance** - compare current and active power per phase to spot a
   phase that carries most of the load.
 - **Supply quality** - watch the phase and line voltages and the frequency,
@@ -141,7 +146,9 @@ System -> Network** (with only the default adapter, that is
   until Home Assistant stops:
   - a module with a meter that is not set up yet appears under **Discovered**
     (only a meter on port 502 and unit id 1; any other is added by hand).
-    Each module's meter is asked once per run of Home Assistant;
+    A meter that answered is not asked again during the same run of Home
+    Assistant; one that did not answer, or was refused for its data type,
+    is asked again by the next search;
   - a module that turned up at a new address takes its entry along, once it
     answers there with its own serial number - the entry's host is updated
     and the entry reloaded. An entry set up with a host name keeps it.
@@ -164,7 +171,13 @@ An empty server field means "not set".
 - When the module stores the settings but does not confirm using them, the
   page says so; it uses them after its next restart at the latest.
 - Two pages saved at once are written one after the other.
-- The page appears only when the module answered at setup.
+- The page appears once a setup has reached the module. A module that
+  misses a request at setup keeps its page and device. One that answers as
+  another device, or refuses its version block with the exception "illegal
+  function", "illegal data address" or one of the two gateway exceptions, is
+  removed with its entities.
+  A module device the entry no longer reaches can also be deleted from its
+  device page.
 
 ## Migrating from a YAML `modbus:` block
 
@@ -218,7 +231,7 @@ what the replaced YAML block used; the identity group is read once at setup
 and has no interval:
 
 - **Measurement interval** - the instantaneous values (voltage, current,
-  power, ...); default 15 seconds.
+  power, ...) and the quadrant and power-down counter; default 15 seconds.
 - **Energy interval** - the energy counters; default 300 seconds.
 
 Both can be changed under **Configure -> Poll intervals**, within 5-3600
@@ -243,8 +256,9 @@ meter whose link is down is logged at *info*, not as an error.
 - **Registers the manual shades grey** get a sensor only when the meter
   reports a non-zero value at setup; a meter that starts filling them later
   needs the integration reloaded.
-- **One meter per entry**; several meters mean several entries, each with
-  its own host or unit id.
+- **One meter per entry, one meter per module**: the 879-9000's RS232 port
+  connects exactly one meter, so several meters mean several modules and
+  several entries.
 - **At most four Modbus TCP connections** per 879-9000 module, according to
   WAGO's data sheet. Home Assistant uses one per module; every other program
   polling the same module takes one of the remaining three.
@@ -300,7 +314,8 @@ python -m venv .venv
 .venv/bin/python .github/scripts/install_core_modbus_requirements.py
 ```
 
-The second command brings Home Assistant, the test plugin and the gate tools;
+The second command brings Home Assistant, the test plugin and the gate tools
+except `gitleaks`, a separate binary (`check.sh` needs 8.30 or newer);
 the third adds what core's `modbus` integration needs (`pymodbus` and friends).
 That step is separate because those versions are not this repository's to
 choose: `manifest.json` declares `modbus-connection[tmodbus]>=4.10.0` with a
@@ -341,8 +356,9 @@ Three more checks run **only on GitHub**, because they need its runners or
 actions: HACS validation (`validate.yml`), hassfest (`hassfest.yaml`) and
 CodeQL (`codeql.yml`). A green `check.sh` therefore says nothing about them.
 
-CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs,
-always against both Home Assistant versions, plus those three - on every push
+CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs -
+the tests against both Home Assistant versions, `mypy` and the mutation pass
+against the current one, `gitleaks` over the full history - plus those three - on every push
 to a branch other than Dependabot's and on every pull request; HACS
 validation and hassfest also run nightly, CodeQL weekly.
 

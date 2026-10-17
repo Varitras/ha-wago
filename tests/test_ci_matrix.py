@@ -24,6 +24,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / ".github" / "scripts" / "resolve_phcc.py"
 WORKFLOW = REPO / ".github" / "workflows" / "test.yaml"
+CHECK = REPO / ".github" / "scripts" / "check.sh"
 TEST_REQUIREMENTS = REPO / "requirements_test.txt"
 # The gates that must judge a change the same way on a laptop and in CI.
 GATE_TOOLS = ("ruff", "mypy", "pip-audit")
@@ -233,17 +234,29 @@ def test_the_workflow_still_runs_ruff_pinned():
     assert _reads_pin_from_requirements(workflow, "ruff")
 
 
-def test_the_secret_scan_in_ci_uses_the_repositorys_own_rules():
-    """check.sh and the pre-push hook scan with .gitleaks.toml; the action
-    does not read it unless told, so CI would otherwise vouch for a rule set
-    no local run ever exercised."""
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def test_the_secret_scan_in_ci_is_the_local_one():
+    """Same command, same rules, whole history: the action CI used before
+    scanned nothing on the push of a --no-ff merge."""
+    check = CHECK.read_text(encoding="utf-8")
+    command = re.search(r"^gitleaks git .*$", check, flags=re.MULTILINE).group()
     steps = _steps_of("gitleaks")
 
-    assert any("GITLEAKS_CONFIG:" in line for line in steps), (
-        "the gitleaks job does not name .gitleaks.toml, so CI scans with "
-        "different rules than check.sh and the pre-push hook"
+    assert any(line.strip() == f"run: {command}" for line in steps)
+    assert any("fetch-depth: 0" in line for line in steps)
+
+
+def test_ci_scans_with_a_gitleaks_check_sh_accepts():
+    """Two gitleaks versions judged the same commits differently."""
+    floor = re.search(
+        r"^GITLEAKS_MIN=(\S+)$", CHECK.read_text(encoding="utf-8"), re.MULTILINE
     )
-    assert any(".gitleaks.toml" in line for line in steps)
+    pinned = re.search(r'GITLEAKS_VERSION: "([^"]+)"', "\n".join(_steps_of("gitleaks")))
+
+    assert _version(pinned.group(1)) >= _version(floor.group(1))
 
 
 def _pins_of(text: str) -> dict[str, str]:

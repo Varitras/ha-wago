@@ -12,6 +12,7 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 from modbus_connection import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
 
+from custom_components.wago_879.wago_879_api.device import FLOAT_DATA_TYPE
 from custom_components.wago_879.wago_879_api.registers import MODULE_UNIT_ID
 
 pytest_plugins = ("pytest_homeassistant_custom_component",)
@@ -35,6 +36,21 @@ def _no_real_meter(monkeypatch):
         )
 
     monkeypatch.setattr(CORE_CONNECTION, _refuse)
+
+
+@pytest.fixture(autouse=True)
+def _no_deprecated_core_calls(caplog):
+    """Core only logs a deprecated call from a custom integration, until the
+    release that turns it into an error."""
+    yield
+    # In teardown `caplog.records` holds only the teardown's own records.
+    deprecated = [
+        record.getMessage()
+        for phase in ("setup", "call")
+        for record in caplog.get_records(phase)
+        if "Detected that custom integration" in record.getMessage()
+    ]
+    assert not deprecated
 
 
 # Where the integration sends its UDP search for modules.
@@ -66,9 +82,11 @@ class SharedMockModbus:
     def __init__(self) -> None:
         self.params_seen: list = []
         self.connections: list[MockModbusConnection] = []
-        self._raw: dict = {"holding": {}}
+        # A meter in its standard mode, as every meter leaves the factory.
+        self._raw: dict = {"holding": {0x4026: FLOAT_DATA_TYPE}}
         self._module_raw: dict = {"holding": {}}
         self._module_failure: Exception | None = None
+        self._module_read_failures: list = []
         self._request_failure: Exception | None = None
         self._read_failures: list = []
 
@@ -83,6 +101,8 @@ class SharedMockModbus:
         module = connection.for_unit(MODULE_UNIT_ID)
         module.load_raw(self._module_raw)
         module.fail_requests(self._module_failure)
+        for address, error in self._module_read_failures:
+            module.fail_read(address, error, register_type="holding")
         module.on_write(self._keep_module_write)
         self.connections.append(connection)
         return connection
@@ -118,6 +138,14 @@ class SharedMockModbus:
         self._module_failure = error
         for connection in self.connections:
             connection.for_unit(MODULE_UNIT_ID).fail_requests(error)
+
+    def fail_module_read(self, address: int, error: Exception) -> None:
+        """Unit 255 refuses the holding block starting at ``address``."""
+        self._module_read_failures.append((address, error))
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).fail_read(
+                address, error, register_type="holding"
+            )
 
     def fail_read_band(self, address: int) -> None:
         """The meter refuses the holding block starting at ``address``."""

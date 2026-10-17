@@ -1,5 +1,7 @@
 """The config, reconfigure and options flows through the flow manager."""
 
+import asyncio
+
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component.common")
@@ -7,6 +9,7 @@ from modbus_connection import ModbusConnectionError
 import probatio as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.wago_879 import config_flow
 from custom_components.wago_879.const import (
     CONF_ENERGY_INTERVAL,
     CONF_HOST,
@@ -190,6 +193,40 @@ async def _reconfigure(hass, entry, host="192.0.2.11"):
     )
 
 
+@pytest.mark.parametrize(
+    ("host", "registers", "error"),
+    [
+        (" ", {}, "invalid_host"),
+        ("192.0.2.11", {0x4002: 0x9999}, "unsupported_meter"),
+        ("192.0.2.11", {0x4026: 2}, "unsupported_data_type"),
+    ],
+    ids=["no host", "no wago 879", "integers"],
+)
+async def test_a_reconfigure_the_meter_does_not_confirm_keeps_the_entry(
+    hass, meter, host, registers, error
+):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    meter.load_raw({"holding": registers})
+
+    result = await _reconfigure(hass, entry, host)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+    assert entry.data == USER_INPUT
+
+
+async def test_a_reconfigure_to_a_silent_address_keeps_the_entry(hass, meter):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    meter.fail_requests(ModbusConnectionError("down"))
+
+    result = await _reconfigure(hass, entry)
+
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data == USER_INPUT
+
+
 async def test_reconfigure_loads_an_entry_that_was_never_set_up(hass):
     """An entry with no update listener still has to be reloaded by the flow.
 
@@ -344,6 +381,16 @@ async def test_a_device_that_is_no_wago_879_is_refused(hass, meter):
     assert result["errors"] == {"base": "unsupported_meter"}
 
 
+async def test_a_meter_set_to_send_integers_is_refused(hass, meter):
+    meter.load_raw({"holding": {0x4026: 2}})
+    started = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        started["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unsupported_data_type"}
+
+
 async def test_reconfigure_retitles_an_entry_still_named_after_its_old_address(hass):
     """Setup retitles an address title only while it equals the saved host. A
     disabled entry reconfigured before its first setup under this version
@@ -465,6 +512,91 @@ async def test_a_module_that_moved_takes_its_entry_along(hass, meter):
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == HOST
     assert entry.state is ConfigEntryState.LOADED
+
+
+def _hold_the_module_check(monkeypatch):
+    """Stop the follow inside its Modbus check until the test lets it go."""
+    started, release = asyncio.Event(), asyncio.Event()
+    check = config_flow._async_module_answers_at
+
+    async def held(hass, module, port):
+        started.set()
+        await release.wait()
+        return await check(hass, module, port)
+
+    monkeypatch.setattr(config_flow, "_async_module_answers_at", held)
+    return started, release
+
+
+async def _entry_on_old_host(hass, meter):
+    meter.load_module_raw(module_holding())
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+    return entry
+
+
+async def test_a_host_name_set_during_the_follow_check_is_kept(
+    hass, meter, monkeypatch
+):
+    """The follow decided on the old address; the user's host name came after."""
+    entry = await _entry_on_old_host(hass, meter)
+    started, release = _hold_the_module_check(monkeypatch)
+    following = hass.async_create_task(_discover(hass))
+    await started.wait()
+
+    reconfigure = await entry.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        reconfigure["flow_id"],
+        {CONF_HOST: "wago-module", CONF_PORT: 502, CONF_UNIT_ID: 1},
+    )
+    release.set()
+    await following
+    await hass.async_block_till_done()
+
+    assert entry.data[CONF_HOST] == "wago-module"
+
+
+async def test_an_entry_deleted_during_the_follow_check_ends_the_follow(
+    hass, meter, monkeypatch
+):
+    entry = await _entry_on_old_host(hass, meter)
+    started, release = _hold_the_module_check(monkeypatch)
+    following = hass.async_create_task(_discover(hass))
+    await started.wait()
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    release.set()
+    result = await following
+
+    assert result["type"] is FlowResultType.ABORT
+
+
+async def test_a_reconfigure_overtaken_by_another_change_changes_nothing(
+    hass, meter, monkeypatch
+):
+    """The follow moved the entry while this reconfigure asked the meter."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    probe = config_flow.probe_serial
+
+    async def overtaken(hass, user_input):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_HOST: "wago-module"}
+        )
+        return await probe(hass, user_input)
+
+    monkeypatch.setattr(config_flow, "probe_serial", overtaken)
+    flow = await entry.start_reconfigure_flow(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        flow["flow_id"], {CONF_HOST: "192.0.2.20", CONF_PORT: 502, CONF_UNIT_ID: 1}
+    )
+
+    assert result["reason"] == "entry_changed"
+    assert entry.data[CONF_HOST] == "wago-module"
 
 
 async def test_a_module_reached_by_host_name_keeps_the_name(hass, meter):
@@ -608,6 +740,31 @@ async def test_an_address_the_module_does_not_confirm_moves_nothing(
     )
     entry.add_to_hass(hass)
     _own_module(hass, entry)
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == OLD_HOST
+
+
+@pytest.mark.parametrize(
+    "silenced",
+    ["no answer", "held with other link settings"],
+)
+async def test_a_module_that_cannot_be_asked_at_its_new_address_moves_nothing(
+    hass, meter, silenced
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+    if silenced == "no answer":
+        meter.fail_module_requests(ModbusConnectionError("down"))
+    else:
+        holder = MockConfigEntry(domain="other", data={})
+        holder.add_to_hass(hass)
+        async_get_unit(hass, holder, other_link_settings(MODULE.host, 502), 1)
 
     result = await _discover(hass)
 
@@ -785,6 +942,128 @@ async def test_a_write_the_module_refuses_is_a_form_error(hass, meter):
     assert result["errors"] == {"base": "module_write_failed"}
 
 
+def _network_writes(writes):
+    return [write.values for write in writes if write.address == 0x0064]
+
+
+async def _fail_one_store(hass, meter, entry, changes):
+    """A page whose write reached the module's blocks but not its store."""
+    result = await _module_form(hass, entry)
+    unit = meter.connections[-1].for_unit(MODULE_UNIT_ID)
+    unit.fail_write(0x03F2, ModbusConnectionError("down"))
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **changes}
+    )
+    assert result["errors"] == {"base": "module_write_failed"}
+    unit.fail_write(0x03F2, None)
+    return result
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"hostname": "meter-room"}, {}],
+    ids=["another field changed", "nothing else changed"],
+)
+async def test_a_field_set_back_after_a_failed_write_is_written_back(
+    hass, meter, changes
+):
+    """The failed write left the new address in the module's blocks; the
+    next save compares with those, not with the page as it opened."""
+    entry = await _loaded_with_module(hass, meter)
+    result = await _fail_one_store(hass, meter, entry, {"ip_address": "192.0.2.11"})
+    writes = _module_writes(meter)
+
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **changes}
+    )
+    await hass.async_block_till_done()
+
+    # HOST, 192.0.2.10, in the first two words of the network block.
+    assert _network_writes(writes)[-1][0:2] == [0xC000, 0x020A]
+    assert entry.data[CONF_HOST] == HOST
+
+
+@pytest.mark.parametrize(
+    "more",
+    [{}, {"hostname": "meter-room"}],
+    ids=["same page", "one field more"],
+)
+async def test_a_retry_after_a_failed_store_stores_applies_and_follows(
+    hass, meter, more
+):
+    """The blocks already hold the new address, so they match the retry;
+    it is still the retry that has to store, apply and take the entry along."""
+    entry = await _loaded_with_module(hass, meter)
+    new_address = {"ip_address": "192.0.2.11"}
+    result = await _fail_one_store(hass, meter, entry, new_address)
+    writes = _module_writes(meter)
+
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **new_address, **more}
+    )
+    await hass.async_block_till_done()
+
+    assert [write.address for write in writes][-2:] == [0x03F2, 0x03F1]
+    assert entry.data[CONF_HOST] == "192.0.2.11"
+
+
+async def test_an_entry_deleted_while_the_module_is_written_ends_the_page(
+    hass, meter, monkeypatch
+):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    module_api = entry.runtime_data.module_api
+    write = module_api.async_write
+
+    async def deleted_while_writing(changes):
+        await write(changes)
+        await hass.config_entries.async_remove(entry.entry_id)
+
+    monkeypatch.setattr(module_api, "async_write", deleted_while_writing)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "hostname": "meter-room"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_changed"
+
+
+async def test_a_stale_module_page_does_not_undo_another_page_s_change(hass, meter):
+    """Only what a page changed is written; the rest is what the module holds."""
+    entry = await _loaded_with_module(hass, meter)
+    first = await _module_form(hass, entry)
+    second = await _module_form(hass, entry)
+
+    await hass.config_entries.options.async_configure(
+        first["flow_id"], {**result_defaults(first), "timeout": 2500}
+    )
+    await hass.async_block_till_done()
+    await hass.config_entries.options.async_configure(
+        second["flow_id"], {**result_defaults(second), "hostname": "meter-room"}
+    )
+    await hass.async_block_till_done()
+
+    values = await entry.runtime_data.module_api.async_read()
+    assert values["hostname"] == "meter-room"
+    assert values["timeout"] == 2500
+
+
+async def test_a_module_without_a_host_name_can_still_be_saved(hass, meter):
+    """The frontend leaves an empty field out of what it sends; a required
+    one it refuses to send at all."""
+    no_name = dict.fromkeys(range(0x0073, 0x0083), 0)
+    entry = await _loaded_with_module(hass, meter, no_name)
+    result = await _module_form(hass, entry)
+    sent = {**result_defaults(result), "timeout": 2500}
+    del sent["hostname"]
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], sent)
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_a_module_gone_silent_ends_the_page(hass, meter):
     """The page shows what the module holds now, not what setup read; with
     no answer there is nothing true to show."""
@@ -934,6 +1213,17 @@ async def test_a_meter_that_did_not_answer_is_asked_again_by_the_next_search(
     meter.fail_requests(ModbusConnectionError("down"))
     assert (await _discover(hass))["reason"] == "cannot_connect"
     meter.fail_requests(None)
+
+    result = await _discover(hass)
+
+    assert result["step_id"] == "discovery_confirm"
+
+
+async def test_a_meter_set_back_to_floats_is_offered_by_the_next_search(hass, meter):
+    """The data type is a setting on the meter, not what the meter is."""
+    meter.load_raw({"holding": {0x4026: 2}})
+    assert (await _discover(hass))["reason"] == "unsupported_data_type"
+    meter.load_raw({"holding": {0x4026: 1}})
 
     result = await _discover(hass)
 

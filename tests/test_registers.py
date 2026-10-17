@@ -16,9 +16,11 @@ from custom_components.wago_879.wago_879_api.registers import (
     ENERGY_FIELDS,
     IDENTITY_FIELDS,
     MEASUREMENT_FIELDS,
+    STATUS_FIELDS,
     Energy,
     Identity,
     Measurements,
+    Status,
     address_of,
 )
 
@@ -45,8 +47,8 @@ MANUAL_ROWS = [
     (Identity, "software_version", 0x4007),
     (Identity, "ct_ratio_primary", 0x401F),
     (Identity, "ct_ratio_secondary", 0x4020),
-    (Identity, "current_quadrant", 0x4017),
-    (Identity, "power_down_counter", 0x4016),
+    (Status, "current_quadrant", 0x4017),
+    (Status, "power_down_counter", 0x4016),
     (Energy, "tariff", 0x6048),
 ]
 
@@ -81,15 +83,19 @@ IDENTITY_MANUAL_ADDRESSES = {
     "software_version": 0x4007,
     "hardware_version": 0x4009,
     "meter_amperes": 0x400B,
-    "power_down_counter": 0x4016,
-    "current_quadrant": 0x4017,
-    "quadrant_l1": 0x4018,
-    "quadrant_l2": 0x4019,
-    "quadrant_l3": 0x401A,
+    "combination_code": 0x400F,
     # Manual page 38 writes 0x401F as two words, primary then secondary.
     "ct_ratio_primary": 0x401F,
     "ct_ratio_secondary": 0x4020,
+    "data_type": 0x4026,
 }
+
+
+def test_the_status_words_are_the_manual_s_running_counters():
+    """Power-down counter, current quadrant and the three phase quadrants."""
+    assert [address_of(Status, name) for name in STATUS_FIELDS] == list(
+        range(0x4016, 0x401B)
+    )
 
 
 def test_every_identity_field_matches_its_manual_address():
@@ -100,7 +106,7 @@ def test_every_identity_field_matches_its_manual_address():
 
 
 def test_every_field_name_is_unique_across_components():
-    names = [*MEASUREMENT_FIELDS, *ENERGY_FIELDS, *IDENTITY_FIELDS]
+    names = [*MEASUREMENT_FIELDS, *STATUS_FIELDS, *ENERGY_FIELDS, *IDENTITY_FIELDS]
     assert len(names) == len(set(names))
 
 

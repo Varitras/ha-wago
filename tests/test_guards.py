@@ -238,7 +238,7 @@ TOOL_INVOCATIONS = {
         "run: pip-audit -r requirements.txt",
         "-m pip_audit -r requirements.txt",
     ),
-    "gitleaks": ("uses: gitleaks/gitleaks-action", "gitleaks git"),
+    "gitleaks": ("run: gitleaks git", "gitleaks git"),
     "pytest": ("run: pytest tests/", "-m pytest tests/"),
     "check_min_ha.py": (
         "run: python .github/scripts/check_min_ha.py",
