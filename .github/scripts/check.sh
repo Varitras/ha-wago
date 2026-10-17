@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every gate that can run locally, in one command.
 #
-# Run this before calling a change done; CI runs the same set, and a guard in
+# Run this before calling a change done; CI runs the same tools, and a guard in
 # tests/test_guards.py fails if the two ever drift apart. CI also runs HACS
 # validation, hassfest and CodeQL, which exist only as GitHub workflows - a
 # green run here does not cover them. The order is cheap to expensive,

@@ -63,9 +63,10 @@ read at setup but not surfaced.
   4PU, 4PS and 2PU CT variants; a variant that fills registers the 4PU leaves
   empty gets the matching sensors (voltage and current average, CT ratio),
   see [Entity visibility](#entity-visibility). Setup refuses a device whose
-  meter code is none of these three variants.
+  meter code is none of these three variants, and a meter set to a data type
+  other than the standard one (float).
 - **Not supported:** other WAGO meters, other Modbus RTU devices behind the
-  module's RS-485 port, and the 879-9000 over Modbus RTU.
+  module's RS232 port, and the 879-9000 over Modbus RTU.
 
 ## Use cases
 
@@ -144,7 +145,8 @@ System -> Network** (with only the default adapter, that is
   until Home Assistant stops:
   - a module with a meter that is not set up yet appears under **Discovered**
     (only a meter on port 502 and unit id 1; any other is added by hand).
-    Each module's meter is asked once per run of Home Assistant;
+    A meter that answered is not asked again during the same run of Home
+    Assistant; one that did not answer is asked again by the next search;
   - a module that turned up at a new address takes its entry along, once it
     answers there with its own serial number - the entry's host is updated
     and the entry reloaded. An entry set up with a host name keeps it.
@@ -167,7 +169,11 @@ An empty server field means "not set".
 - When the module stores the settings but does not confirm using them, the
   page says so; it uses them after its next restart at the latest.
 - Two pages saved at once are written one after the other.
-- The page appears only when the module answered at setup.
+- The page appears once a setup has reached the module. A module that
+  misses a request at setup keeps its page and device; one that answers as
+  another device, or with a Modbus exception, is removed with its entities.
+  A module device the entry no longer reaches can also be deleted from its
+  device page.
 
 ## Migrating from a YAML `modbus:` block
 
@@ -246,8 +252,9 @@ meter whose link is down is logged at *info*, not as an error.
 - **Registers the manual shades grey** get a sensor only when the meter
   reports a non-zero value at setup; a meter that starts filling them later
   needs the integration reloaded.
-- **One meter per entry**; several meters mean several entries, each with
-  its own host or unit id.
+- **One meter per entry, one meter per module**: the 879-9000's RS232 port
+  connects exactly one meter, so several meters mean several modules and
+  several entries.
 - **At most four Modbus TCP connections** per 879-9000 module, according to
   WAGO's data sheet. Home Assistant uses one per module; every other program
   polling the same module takes one of the remaining three.
@@ -303,7 +310,8 @@ python -m venv .venv
 .venv/bin/python .github/scripts/install_core_modbus_requirements.py
 ```
 
-The second command brings Home Assistant, the test plugin and the gate tools;
+The second command brings Home Assistant, the test plugin and the gate tools
+except `gitleaks`, a separate binary (`check.sh` needs 8.30 or newer);
 the third adds what core's `modbus` integration needs (`pymodbus` and friends).
 That step is separate because those versions are not this repository's to
 choose: `manifest.json` declares `modbus-connection[tmodbus]>=4.10.0` with a
@@ -344,8 +352,9 @@ Three more checks run **only on GitHub**, because they need its runners or
 actions: HACS validation (`validate.yml`), hassfest (`hassfest.yaml`) and
 CodeQL (`codeql.yml`). A green `check.sh` therefore says nothing about them.
 
-CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs,
-always against both Home Assistant versions, plus those three - on every push
+CI (see `.github/workflows/`) runs the gates of `check.sh` as separate jobs -
+the tests against both Home Assistant versions, `mypy` and the mutation pass
+against the current one, `gitleaks` over the full history - plus those three - on every push
 to a branch other than Dependabot's and on every pull request; HACS
 validation and hassfest also run nightly, CodeQL weekly.
 

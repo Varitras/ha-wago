@@ -283,7 +283,7 @@ def build_worktrees(count: int, into: Path, cases: list) -> list:
             if not (tree / case["path"]).exists():
                 raise SystemExit(
                     f"the worker copy has no {case['path']}, which the plan "
-                    "mutates. Check WORKTREE_EXCLUDES."
+                    "mutates. Worker copies hold only what git ls-files lists."
                 )
         trees.append(tree)
     return trees

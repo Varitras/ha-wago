@@ -11,7 +11,8 @@ on:
   workflow_dispatch:
 
 # Validation only reads the checkout. Actions are pinned to commits: a tag
-# or branch can move under a workflow nobody changed.
+# or branch can move under a workflow nobody changed. The HACS action still
+# runs the image ghcr.io/hacs/action:main; the pin freezes only its wrapper.
 permissions:
   contents: read
 

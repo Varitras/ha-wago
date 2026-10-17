@@ -330,7 +330,7 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(entry: config_entries.ConfigEntry) -> WagoOptionsFlow:
-        """The options flow for the intervals."""
+        """The options flow: poll intervals, and the module's own settings."""
         return WagoOptionsFlow()
 
     async def _validate(
