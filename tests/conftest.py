@@ -86,6 +86,7 @@ class SharedMockModbus:
         self._raw: dict = {"holding": {0x4026: FLOAT_DATA_TYPE}}
         self._module_raw: dict = {"holding": {}}
         self._module_failure: Exception | None = None
+        self._module_read_failures: list = []
         self._request_failure: Exception | None = None
         self._read_failures: list = []
 
@@ -100,6 +101,8 @@ class SharedMockModbus:
         module = connection.for_unit(MODULE_UNIT_ID)
         module.load_raw(self._module_raw)
         module.fail_requests(self._module_failure)
+        for address, error in self._module_read_failures:
+            module.fail_read(address, error, register_type="holding")
         module.on_write(self._keep_module_write)
         self.connections.append(connection)
         return connection
@@ -135,6 +138,14 @@ class SharedMockModbus:
         self._module_failure = error
         for connection in self.connections:
             connection.for_unit(MODULE_UNIT_ID).fail_requests(error)
+
+    def fail_module_read(self, address: int, error: Exception) -> None:
+        """Unit 255 refuses the holding block starting at ``address``."""
+        self._module_read_failures.append((address, error))
+        for connection in self.connections:
+            connection.for_unit(MODULE_UNIT_ID).fail_read(
+                address, error, register_type="holding"
+            )
 
     def fail_read_band(self, address: int) -> None:
         """The meter refuses the holding block starting at ``address``."""

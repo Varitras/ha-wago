@@ -6,14 +6,7 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from modbus_connection import (
-    GatewayPathUnavailableError,
-    GatewayTargetError,
-    IllegalDataAddressError,
-    IllegalFunctionError,
-    ModbusError,
-    ModbusTcpParams,
-)
+from modbus_connection import ModbusError, ModbusTcpParams
 
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntryState
@@ -60,14 +53,6 @@ from .wago_879_api.registers import MODULE_UNIT_ID
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-# Exception responses that answer the question: whoever sits at the address
-# serves no 879-9000 on unit 255. A timeout, a lost link or "busy" leave it open.
-NO_MODULE_ANSWERS = (
-    IllegalFunctionError,
-    IllegalDataAddressError,
-    GatewayPathUnavailableError,
-    GatewayTargetError,
-)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -248,11 +233,10 @@ async def _async_module(
     ]
     try:
         module = await module_api.async_read()
-    except NO_MODULE_ANSWERS:
-        module = None
     except ModbusError as err:
         _LOGGER.debug(
-            "No answer on unit %s, keeping the module last seen: %s",
+            "Unit %s left open whether the module is there, so a module device "
+            "this entry has stays: %s",
             MODULE_UNIT_ID,
             redact(str(err), host),
         )

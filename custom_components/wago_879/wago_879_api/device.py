@@ -8,7 +8,14 @@ from ipaddress import IPv4Address
 import math
 from typing import Any
 
-from modbus_connection import ModbusError, ModbusUnit
+from modbus_connection import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    IllegalDataAddressError,
+    IllegalFunctionError,
+    ModbusError,
+    ModbusUnit,
+)
 from modbus_connection.encode import encode_string
 from modbus_connection.model import Component
 from modbus_connection.model.fields import IPv4Field, RegisterField, StringField
@@ -154,6 +161,15 @@ HEX_DIGITS_PER_WORD = 4
 WORD_RANGE = 0x10000
 # What the tool writes to a command register to run the command.
 COMMAND_RUN = 1
+# Exception responses to the version read that answer the question: whoever
+# sits at the address serves no 879-9000 on its unit. A timeout, a lost link
+# or "busy" leave it open.
+NO_MODULE_ANSWERS = (
+    IllegalFunctionError,
+    IllegalDataAddressError,
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+)
 
 # Two groups of the keys async_read reports, for whoever treats them alike:
 # on/off switches, and servers the module talks to (0.0.0.0 when not set).
@@ -207,9 +223,13 @@ class WagoModule:
     async def async_read(self) -> dict[str, Any] | None:
         """Everything the configuration tool shows, None for another gateway.
 
-        Raises ModbusError when unit 255 does not answer at all.
+        Raises ModbusError when it stays open whether the module is there:
+        no answer, or a refusal after the module named itself.
         """
-        await self._version.async_update()
+        try:
+            await self._version.async_update()
+        except NO_MODULE_ANSWERS:
+            return None
         if self._version.device_type != MODULE_DEVICE_TYPE:
             return None
         await self._settings.async_update()

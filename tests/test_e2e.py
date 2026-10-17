@@ -10,10 +10,15 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 from datetime import timedelta
 
 from modbus_connection import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    IllegalDataAddressError,
     IllegalFunctionError,
     ModbusConnectionError,
     ModbusTcpParams,
+    ModbusTimeoutError,
     ModbusTlsParams,
+    ServerDeviceBusyError,
 )
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -578,12 +583,26 @@ def _module_device(hass, entry, serial=MODULE_SERIAL):
     )
 
 
-async def test_a_module_that_misses_a_read_at_setup_stays_the_entry_s(hass, meter):
+@pytest.mark.parametrize(
+    "silence",
+    [
+        lambda meter: meter.fail_module_requests(ModbusConnectionError("lost")),
+        lambda meter: meter.fail_module_requests(ModbusTimeoutError("no reply")),
+        lambda meter: meter.fail_module_requests(ServerDeviceBusyError()),
+        # It named itself an 879-9000 first; a refusal after that is no
+        # answer to whether it is one.
+        lambda meter: meter.fail_module_read(0x0000, IllegalDataAddressError()),
+    ],
+    ids=["link lost", "timeout", "busy", "refused after naming itself"],
+)
+async def test_a_module_that_misses_a_read_at_setup_stays_the_entry_s(
+    hass, meter, silence
+):
     """One unanswered request says nothing about whether the module is there."""
     meter.load_module_raw(module_holding())
     entry = await _setup(hass, _entry(hass))
     module = _module_device(hass, entry)
-    meter.fail_module_requests(ModbusConnectionError("timed out"))
+    silence(meter)
 
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
@@ -597,7 +616,20 @@ async def test_a_module_that_misses_a_read_at_setup_stays_the_entry_s(hass, mete
 
 @pytest.mark.parametrize(
     "gateway",
-    ["refuses unit 255", "is another device on unit 255"],
+    [
+        lambda meter: meter.fail_module_requests(IllegalFunctionError()),
+        lambda meter: meter.fail_module_requests(IllegalDataAddressError()),
+        lambda meter: meter.fail_module_requests(GatewayPathUnavailableError()),
+        lambda meter: meter.fail_module_requests(GatewayTargetError()),
+        lambda meter: meter.load_module_raw({"holding": {0x0400: 0}}),
+    ],
+    ids=[
+        "illegal function",
+        "illegal data address",
+        "gateway path unavailable",
+        "gateway target failed",
+        "another device on unit 255",
+    ],
 )
 async def test_a_gateway_without_the_module_lets_go_of_the_old_one(
     hass, meter, gateway
@@ -606,10 +638,7 @@ async def test_a_gateway_without_the_module_lets_go_of_the_old_one(
     the search takes the old module's serial for this entry and moves it."""
     meter.load_module_raw(module_holding())
     entry = await _setup(hass, _entry(hass))
-    if gateway == "refuses unit 255":
-        meter.fail_module_requests(IllegalFunctionError())
-    else:
-        meter.load_module_raw({"holding": {0x0400: 0}})
+    gateway(meter)
 
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
