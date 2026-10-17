@@ -18,13 +18,13 @@ interval; the identity group is read once, when the entry is set up.
 - **Energy** - total, per-phase and per-tariff (T1-T4) active and reactive
   energy counters, the reactive-only per-quadrant (Q1-Q4) split, and the
   running day counters (total and per phase).
-- **Identity** - serial number, meter code, firmware/hardware version, Modbus
-  unit id, CT ratio (when the meter reports one), rated current, data type
-  and combination code.
+- **Identity** - serial number, meter code, protocol, firmware and hardware
+  version, Modbus unit id, CT ratio (when the meter reports one), rated
+  current, data type and combination code.
 - **Module** - the 879-9000's own settings, read at setup from its Modbus
-  unit 255: serial number, firmware and bootloader version, DHCP, address,
-  netmask, gateway, DNS and NTP servers, host name, serial port, baud rate,
-  parity and timeout. The module is a device of its own, the meter is linked
+  unit 255: serial number, firmware and bootloader version, DHCP and NTP on
+  or off, address, netmask, gateway, DNS and NTP servers, host name, serial
+  port, baud rate, parity and timeout. The module is a device of its own, the meter is linked
   to it, and every value is a diagnostic entity. Behind another gateway
   nothing of this appears.
 
@@ -49,10 +49,10 @@ setup - current average follows voltage average, since 0 A is a real reading
 at no load. On a meter that leaves them empty they do not appear, and sensors
 created by an earlier version show as no longer provided and can be deleted.
 
-The serial number, meter code, protocol version and the firmware and hardware
-versions are not entities at any enablement level. Serial number, firmware and
-hardware version appear on the device card; meter code and protocol version are
-read at setup but not surfaced.
+The serial number, meter code, protocol version, firmware and hardware
+versions, data type and combination code are not entities at any enablement
+level. Serial number, firmware and hardware version appear on the device card;
+the others are in the diagnostics download.
 
 ## Supported devices
 
@@ -130,6 +130,16 @@ phase voltages, set to *arithmetic mean*.
    so a wrong address or unit id is reported right away. Host, port and unit
    id can be changed later with **Reconfigure**, the intervals under
    **Configure**.
+
+To update, install the new version in HACS and restart Home Assistant;
+existing entries are migrated on the next start.
+
+## Installation (manual)
+
+Copy `custom_components/wago_879` from this repository into the
+`custom_components` folder of the Home Assistant configuration directory,
+restart Home Assistant and add the integration as in step 3 above. To
+update, replace the folder and restart.
 
 ## Discovery
 
@@ -231,11 +241,12 @@ what the replaced YAML block used; the identity group is read once at setup
 and has no interval:
 
 - **Measurement interval** - the instantaneous values (voltage, current,
-  power, ...) and the quadrant and power-down counter; default 15 seconds.
+  power, ...) and the status words (quadrants and power-down counter);
+  default 15 seconds.
 - **Energy interval** - the energy counters; default 300 seconds.
 
-Both can be changed under **Configure -> Poll intervals**, within 5-3600
-seconds.
+Both can be changed under **Configure** (**Configure -> Poll intervals** when
+the module settings page is offered too), within 5-3600 seconds.
 
 A poll that fails keeps the last values; only the fourth failed poll in a row
 marks the entities unavailable, and the next good poll brings them back. A
@@ -300,11 +311,11 @@ meter whose link is down is logged at *info*, not as an error.
 ## Removal
 
 1. **Settings -> Devices & services -> WAGO 879 Energy Meter**, open the
-   entry's menu and choose **Delete**. This removes the device and its
-   entities; the history recorded under their entity ids stays in the
+   entry's menu and choose **Delete**. This removes the meter and module
+   devices and their entities; the history recorded under their entity ids stays in the
    database until the recorder purges it.
-2. If it was installed through HACS, remove it there and restart Home
-   Assistant.
+2. Remove it in HACS, or delete `custom_components/wago_879` if it was
+   copied by hand, and restart Home Assistant.
 
 ## Setting up a development environment
 
