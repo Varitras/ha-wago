@@ -1007,6 +1007,28 @@ async def test_a_retry_after_a_failed_store_stores_applies_and_follows(
     assert entry.data[CONF_HOST] == "192.0.2.11"
 
 
+async def test_an_entry_deleted_while_the_module_is_written_ends_the_page(
+    hass, meter, monkeypatch
+):
+    entry = await _loaded_with_module(hass, meter)
+    result = await _module_form(hass, entry)
+    module_api = entry.runtime_data.module_api
+    write = module_api.async_write
+
+    async def deleted_while_writing(changes):
+        await write(changes)
+        await hass.config_entries.async_remove(entry.entry_id)
+
+    monkeypatch.setattr(module_api, "async_write", deleted_while_writing)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, "hostname": "meter-room"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_changed"
+
+
 async def test_a_stale_module_page_does_not_undo_another_page_s_change(hass, meter):
     """Only what a page changed is written; the rest is what the module holds."""
     entry = await _loaded_with_module(hass, meter)

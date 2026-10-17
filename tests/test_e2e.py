@@ -669,3 +669,16 @@ async def test_only_a_module_the_entry_no_longer_reaches_can_be_deleted(hass, me
     assert not await async_remove_config_entry_device(
         hass, entry, _module_device(hass, entry, SERIAL)
     )
+
+
+async def test_any_module_of_an_entry_that_is_not_loaded_can_be_deleted(hass, meter):
+    """Without a loaded entry no module is in use."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    module = _module_device(hass, entry)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+    assert await async_remove_config_entry_device(hass, entry, module)
+    assert not await async_remove_config_entry_device(
+        hass, entry, _module_device(hass, entry, SERIAL)
+    )

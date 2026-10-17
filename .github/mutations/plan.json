@@ -425,5 +425,19 @@
     "old": "        if self._version.device_type != MODULE_DEVICE_TYPE:\n            return None\n        await self._settings.async_update()\n",
     "new": "        if self._version.device_type != MODULE_DEVICE_TYPE:\n            return None\n        try:\n            await self._settings.async_update()\n        except NO_MODULE_ANSWERS:\n            return None\n",
     "tests": "misses_a_read"
+  },
+  {
+    "label": "module page: an entry deleted during the write is finished as if present",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if self.hass.config_entries.async_get_entry(entry_id) is None:\n            return self.async_abort(reason=\"entry_changed\")\n",
+    "new": "",
+    "tests": "deleted_while_the_module"
+  },
+  {
+    "label": "module: a module of an unloaded entry cannot be deleted",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "    if entry.state is not ConfigEntryState.LOADED:\n        return True\n",
+    "new": "",
+    "tests": "can_be_deleted"
   }
 ]
