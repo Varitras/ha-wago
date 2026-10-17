@@ -322,11 +322,11 @@
     "tests": "stale_module_page"
   },
   {
-    "label": "module page: a failed write keeps the baseline the page opened with",
+    "label": "module page: a retry after a failed write sends only what differs",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "            self._module_values = None\n            return self.async_show_form(",
+    "old": "            self._write_failed = True\n            return self.async_show_form(",
     "new": "            return self.async_show_form(",
-    "tests": "set_back_after_a_failed_write"
+    "tests": "set_back_after_a_failed_write or after_a_failed_store"
   },
   {
     "label": "follow: a module silent at its new address crashes the flow",

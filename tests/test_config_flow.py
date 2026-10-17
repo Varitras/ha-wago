@@ -983,6 +983,30 @@ async def test_a_field_set_back_after_a_failed_write_is_written_back(
     assert entry.data[CONF_HOST] == HOST
 
 
+@pytest.mark.parametrize(
+    "more",
+    [{}, {"hostname": "meter-room"}],
+    ids=["same page", "one field more"],
+)
+async def test_a_retry_after_a_failed_store_stores_applies_and_follows(
+    hass, meter, more
+):
+    """The blocks already hold the new address, so they match the retry;
+    it is still the retry that has to store, apply and take the entry along."""
+    entry = await _loaded_with_module(hass, meter)
+    new_address = {"ip_address": "192.0.2.11"}
+    result = await _fail_one_store(hass, meter, entry, new_address)
+    writes = _module_writes(meter)
+
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {**MODULE_FORM, **new_address, **more}
+    )
+    await hass.async_block_till_done()
+
+    assert [write.address for write in writes][-2:] == [0x03F2, 0x03F1]
+    assert entry.data[CONF_HOST] == "192.0.2.11"
+
+
 async def test_a_stale_module_page_does_not_undo_another_page_s_change(hass, meter):
     """Only what a page changed is written; the rest is what the module holds."""
     entry = await _loaded_with_module(hass, meter)

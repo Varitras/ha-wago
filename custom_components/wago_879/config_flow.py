@@ -532,6 +532,7 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
     def __init__(self) -> None:
         """The module is read when its page is opened."""
         self._module_values: dict[str, Any] | None = None
+        self._write_failed = False
 
     def _module_api(self) -> WagoModule | None:
         entry = self.config_entry
@@ -610,6 +611,11 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
         changes = {
             key: value for key, value in settings.items() if current[key] != value
         }
+        # A failed write may have left part of itself in the module's blocks:
+        # set back or not, every field goes again, and only this page's store
+        # and apply make the result last.
+        if self._write_failed:
+            changes = dict(settings)
         # Every write goes to the module's flash.
         if not changes:
             return self._finished()
@@ -620,9 +626,7 @@ class WagoOptionsFlow(config_entries.OptionsFlow):
             await module_api.async_write(changes)
         except ModbusError as err:
             _LOGGER.debug("Module settings not written: %s", redact(str(err), host))
-            # Part of the write may have reached the module's blocks, so the
-            # next save compares with a fresh read, not with the page as opened.
-            self._module_values = None
+            self._write_failed = True
             return self.async_show_form(
                 step_id="module",
                 data_schema=self.add_suggested_values_to_schema(
