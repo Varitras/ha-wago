@@ -112,3 +112,24 @@ async def test_a_search_nobody_answers_finds_nothing(quick):
         assert await async_browse(["127.0.0.1"], port=port) == []
     finally:
         transport.close()
+
+
+async def test_a_cancelled_search_closes_its_socket(quick, monkeypatch):
+    """The search runs every quarter hour; a socket left open each time it is
+    cancelled - at shutdown, say - would pile up."""
+    closed = asyncio.Event()
+
+    class Replies(discovery._Replies):
+        def connection_lost(self, exc):
+            closed.set()
+
+    monkeypatch.setattr(discovery, "_Replies", Replies)
+    search = asyncio.create_task(async_browse(["127.0.0.1"], port=9))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    search.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await search
+
+    await asyncio.wait_for(closed.wait(), 1)

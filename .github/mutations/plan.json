@@ -320,5 +320,103 @@
     "old": "                    min=0,\n",
     "new": "                    min=1,\n",
     "tests": "timeout_the_form_would_refuse"
+  },
+  {
+    "label": "module page: a stale page writes every setting it shows",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        changes = {\n            key: value for key, value in settings.items() if current[key] != value\n        }\n",
+    "new": "        changes = (\n            dict(settings)\n            if any(current[key] != value for key, value in settings.items())\n            else {}\n        )\n",
+    "tests": "stale_module_page"
+  },
+  {
+    "label": "module page: a failed write keeps the baseline the page opened with",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "            self._module_values = None\n            return self.async_show_form(",
+    "new": "            return self.async_show_form(",
+    "tests": "set_back_after_a_failed_write"
+  },
+  {
+    "label": "follow: a module silent at its new address crashes the flow",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "    except _PROBE_FAILURES:\n        return False\n    except HomeAssistantError:\n        # Another consumer holds that address with other link settings.\n        return False\n",
+    "new": "    except HomeAssistantError:\n        # Another consumer holds that address with other link settings.\n        return False\n",
+    "tests": "cannot_be_asked_at_its_new_address"
+  },
+  {
+    "label": "follow: a link clash at the new address crashes the flow",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "    except HomeAssistantError:\n        # Another consumer holds that address with other link settings.\n        return False\n    return values is not None",
+    "new": "    return values is not None",
+    "tests": "cannot_be_asked_at_its_new_address"
+  },
+  {
+    "label": "move: an entry changed while the flow waited is overwritten",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "    if entry is None or entry.data != seen:\n",
+    "new": "    if entry is None:\n",
+    "tests": "overtaken or follow_check"
+  },
+  {
+    "label": "reconfigure: an address the meter does not confirm still moves the entry",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        schema = vol.Schema(_connection_schema(user_input or dict(entry.data)))\n",
+    "new": "        if user_input is not None:\n            async_move_entry(self.hass, entry.entry_id, dict(entry.data), user_input)\n        schema = vol.Schema(_connection_schema(user_input or dict(entry.data)))\n",
+    "tests": "reconfigure"
+  },
+  {
+    "label": "search: a cancelled search leaves its socket open",
+    "path": "custom_components/wago_879/wago_879_api/discovery.py",
+    "old": "    finally:\n        transport.close()\n",
+    "new": "    finally:\n        pass\n",
+    "tests": "cancelled_search"
+  },
+  {
+    "label": "redact: a host name the library lower-cased stays unmasked",
+    "path": "custom_components/wago_879/logging_policy.py",
+    "old": "re.compile(re.escape(identifier), re.IGNORECASE)",
+    "new": "re.compile(re.escape(identifier))",
+    "tests": "letter_case or capitals"
+  },
+  {
+    "label": "poll: a library timeout is reported as the cycle timeout",
+    "path": "custom_components/wago_879/coordinator.py",
+    "old": "    if not isinstance(err, ModbusError):\n",
+    "new": "    if isinstance(err, TimeoutError):\n",
+    "tests": "library_timeout"
+  },
+  {
+    "label": "identity: a meter sending integers is decoded as floats",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "        if values[\"data_type\"] != FLOAT_DATA_TYPE:\n",
+    "new": "        if False:\n",
+    "tests": "integers"
+  },
+  {
+    "label": "measurements: the status words are no longer polled",
+    "path": "custom_components/wago_879/wago_879_api/device.py",
+    "old": "        await self._status.async_update()\n",
+    "new": "",
+    "tests": "quadrant"
+  },
+  {
+    "label": "module: one unanswered read at setup drops the module",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "        return None, known[0].id if known else None\n",
+    "new": "        return None, None\n",
+    "tests": "misses_a_read"
+  },
+  {
+    "label": "module: a gateway without the module keeps the old module device",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "        if device.id != current:\n            devices.async_remove_device(device.id)\n",
+    "new": "        if device.id != current:\n            pass\n",
+    "tests": "lets_go_of_the_old_one or replaced_module"
+  },
+  {
+    "label": "module: the module in use can be deleted by hand",
+    "path": "custom_components/wago_879/__init__.py",
+    "old": "    return device.id != entry.runtime_data.module_device_id\n",
+    "new": "    return True\n",
+    "tests": "can_be_deleted"
   }
 ]

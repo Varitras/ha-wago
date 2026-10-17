@@ -193,6 +193,40 @@ async def _reconfigure(hass, entry, host="192.0.2.11"):
     )
 
 
+@pytest.mark.parametrize(
+    ("host", "registers", "error"),
+    [
+        (" ", {}, "invalid_host"),
+        ("192.0.2.11", {0x4002: 0x9999}, "unsupported_meter"),
+        ("192.0.2.11", {0x4026: 2}, "unsupported_data_type"),
+    ],
+    ids=["no host", "no wago 879", "integers"],
+)
+async def test_a_reconfigure_the_meter_does_not_confirm_keeps_the_entry(
+    hass, meter, host, registers, error
+):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    meter.load_raw({"holding": registers})
+
+    result = await _reconfigure(hass, entry, host)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+    assert entry.data == USER_INPUT
+
+
+async def test_a_reconfigure_to_a_silent_address_keeps_the_entry(hass, meter):
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, unique_id=SERIAL)
+    entry.add_to_hass(hass)
+    meter.fail_requests(ModbusConnectionError("down"))
+
+    result = await _reconfigure(hass, entry)
+
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data == USER_INPUT
+
+
 async def test_reconfigure_loads_an_entry_that_was_never_set_up(hass):
     """An entry with no update listener still has to be reloaded by the flow.
 
@@ -706,6 +740,31 @@ async def test_an_address_the_module_does_not_confirm_moves_nothing(
     )
     entry.add_to_hass(hass)
     _own_module(hass, entry)
+
+    result = await _discover(hass)
+
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == OLD_HOST
+
+
+@pytest.mark.parametrize(
+    "silenced",
+    ["no answer", "held with other link settings"],
+)
+async def test_a_module_that_cannot_be_asked_at_its_new_address_moves_nothing(
+    hass, meter, silenced
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={**USER_INPUT, CONF_HOST: OLD_HOST}, unique_id=SERIAL
+    )
+    entry.add_to_hass(hass)
+    _own_module(hass, entry)
+    if silenced == "no answer":
+        meter.fail_module_requests(ModbusConnectionError("down"))
+    else:
+        holder = MockConfigEntry(domain="other", data={})
+        holder.add_to_hass(hass)
+        async_get_unit(hass, holder, other_link_settings(MODULE.host, 502), 1)
 
     result = await _discover(hass)
 
