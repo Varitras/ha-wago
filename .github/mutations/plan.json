@@ -184,7 +184,7 @@
   {
     "label": "discovery: an entry may only move where its module answers",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "        if moves and await _async_module_answers_at(\n            self.hass, module, int(entry.data[CONF_PORT])\n        ):\n",
+    "old": "        if moves and await _async_module_answers_at(\n            self.hass, module, int(seen[CONF_PORT])\n        ):\n",
     "new": "        if moves:\n",
     "tests": "module_does_not_confirm_moves_nothing"
   },
@@ -201,13 +201,6 @@
     "old": "                await self.async_set_unique_id(serial, raise_on_progress=False)\n",
     "new": "                await self.async_set_unique_id(serial)\n",
     "tests": "waiting_under_discovered_can_be_added_by_hand"
-  },
-  {
-    "label": "setup: a replaced module must leave the entry",
-    "path": "custom_components/wago_879/__init__.py",
-    "old": "        if stale.model == MODULE_MODEL and stale.id != device.id:\n",
-    "new": "        if False:\n",
-    "tests": "replaced_module_leaves_the_entry"
   },
   {
     "label": "options: DHCP left on must not move the entry",
@@ -240,7 +233,7 @@
   {
     "label": "options: stored settings must take the entry along",
     "path": "custom_components/wago_879/config_flow.py",
-    "old": "            self._follow_module(current, settings)\n            return self.async_abort(reason=\"module_not_applied\")\n",
+    "old": "            self._follow_module(entry_id, seen, current, settings)\n            return self.async_abort(reason=\"module_not_applied\")\n",
     "new": "            return self.async_abort(reason=\"module_not_applied\")\n",
     "tests": "unconfirmed_apply_still_takes"
   },
@@ -254,8 +247,8 @@
   {
     "label": "setup: a gateway refusing unit 255 must not stop the meter",
     "path": "custom_components/wago_879/__init__.py",
-    "old": "        return await module_api.async_read()\n    except ModbusError as err:\n",
-    "new": "        return await module_api.async_read()\n    except IndexError as err:\n",
+    "old": "        module = await module_api.async_read()\n    except NO_MODULE_ANSWERS:\n        module = None\n    except ModbusError as err:\n",
+    "new": "        module = await module_api.async_read()\n    except NO_MODULE_ANSWERS:\n        module = None\n    except IndexError as err:\n",
     "tests": "refuses_unit_255_still_loads"
   },
   {
