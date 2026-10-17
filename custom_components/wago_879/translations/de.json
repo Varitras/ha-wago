@@ -52,7 +52,7 @@
       "link_settings_clash": "Eine andere Integration nutzt diese Adresse bereits mit anderen Verbindungseinstellungen",
       "unsupported_meter": "Das Gerät unter dieser Adresse ist kein unterstützter WAGO-879-Zähler",
       "unsupported_data_type": "Der Zähler steht nicht auf dem Standard-Datentyp (Float); stelle ihn zurück und versuche es erneut",
-      "entry_changed": "Der Eintrag wurde inzwischen geändert oder gelöscht; es wurde nichts geändert. Öffne ihn erneut, um es noch einmal zu versuchen."
+      "entry_changed": "Der Eintrag wurde inzwischen geändert oder gelöscht, daher wurde nichts geändert."
     },
     "flow_title": "{name}"
   },

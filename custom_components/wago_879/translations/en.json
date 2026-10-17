@@ -52,7 +52,7 @@
       "link_settings_clash": "Another integration already uses this address with different link settings",
       "unsupported_meter": "The device at this address is not a supported WAGO 879 meter",
       "unsupported_data_type": "The meter is not set to the standard data type (float); set it back, then try again",
-      "entry_changed": "The entry was changed or deleted meanwhile; nothing was changed. Open it again to retry."
+      "entry_changed": "The entry was changed or deleted meanwhile, so nothing was changed."
     },
     "flow_title": "{name}"
   },
