@@ -245,13 +245,13 @@ def _flow_messages_in(node: ast.AST, constants: dict[str, str]):
                 yield "error", _text(child.value, constants)
 
 
-def _flow_messages(flow_source: str, settings_source: str):
+def _flow_messages(source: str):
     """(section, kind, key) for every message a flow can show.
 
     A probe's error is shown as a form error and, in the search's flow, as
     the abort reason; the module settings' refusals are module page errors.
     """
-    tree = ast.parse(flow_source)
+    tree = ast.parse(source)
     constants = _constants(tree)
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name in FLOW_SECTIONS:
@@ -264,18 +264,17 @@ def _flow_messages(flow_source: str, settings_source: str):
                     if key:
                         yield "config", "error", key
                         yield "config", "abort", key
-    for child in ast.walk(ast.parse(settings_source)):
+    for child in ast.walk(tree):
         if isinstance(child, ast.Call) and getattr(child.func, "id", "") == "_Refused":
             yield "options", "error", child.args[0].value
 
 
 def _package_flow_messages():
-    return set(
-        _flow_messages(
-            (PACKAGE / "config_flow.py").read_text(encoding="utf-8"),
-            (PACKAGE / "module_settings.py").read_text(encoding="utf-8"),
-        )
-    )
+    return {
+        message
+        for source in sorted(PACKAGE.rglob("*.py"))
+        for message in _flow_messages(source.read_text(encoding="utf-8"))
+    }
 
 
 @pytest.mark.parametrize("language", LANGUAGES, ids=lambda p: p.stem)
