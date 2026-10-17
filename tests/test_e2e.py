@@ -9,7 +9,7 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 
 from datetime import timedelta
 
-from modbus_connection import ModbusConnectionError, ModbusTlsParams
+from modbus_connection import ModbusConnectionError, ModbusTcpParams, ModbusTlsParams
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -282,6 +282,27 @@ async def test_a_refused_identity_read_keeps_the_address_out_of_the_log(
 
     assert entry.state is ConfigEntryState.SETUP_RETRY
     _assert_address_kept_out(caplog, entry)
+
+
+async def test_a_host_name_typed_with_capitals_is_masked_after_the_library_folds_it(
+    hass, meter, caplog
+):
+    """modbus-connection lower-cases the host it names in its errors; the
+    entry keeps the name as typed."""
+    caplog.set_level(logging.DEBUG)
+    typed = "Wago-Meter.LAN"
+    folded = ModbusTcpParams(host=typed, port=BASE_DATA[CONF_PORT]).host
+    meter.fail_requests(
+        ModbusConnectionError(f"could not connect to {folded}:{BASE_DATA[CONF_PORT]}")
+    )
+    entry = _entry(hass, {**BASE_DATA, CONF_HOST: typed})
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    for spelling in (typed, folded):
+        assert spelling not in _answered_for(caplog)
+        assert spelling not in (entry.reason or "")
 
 
 async def test_a_serial_mismatch_keeps_the_address_out_of_the_log(hass, meter, caplog):

@@ -41,6 +41,13 @@ def test_redact_masks_the_address_inside_text_written_elsewhere():
     )
 
 
+def test_redact_masks_a_host_name_in_any_letter_case():
+    """Host names are case-insensitive, and the library folds them."""
+    assert redact("could not connect to wago-meter.lan:502", "Wago-Meter.LAN") == (
+        f"could not connect to {mask('Wago-Meter.LAN')}:502"
+    )
+
+
 def test_redact_with_nothing_to_mask_leaves_the_text_alone():
     """`str.replace("", ...)` would sprinkle the mask between every character."""
     assert redact("could not connect", "") == "could not connect"
