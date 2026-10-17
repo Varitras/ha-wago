@@ -1219,6 +1219,17 @@ async def test_a_meter_that_did_not_answer_is_asked_again_by_the_next_search(
     assert result["step_id"] == "discovery_confirm"
 
 
+async def test_a_meter_set_back_to_floats_is_offered_by_the_next_search(hass, meter):
+    """The data type is a setting on the meter, not what the meter is."""
+    meter.load_raw({"holding": {0x4026: 2}})
+    assert (await _discover(hass))["reason"] == "unsupported_data_type"
+    meter.load_raw({"holding": {0x4026: 1}})
+
+    result = await _discover(hass)
+
+    assert result["step_id"] == "discovery_confirm"
+
+
 async def test_the_module_page_opens_with_a_timeout_the_form_would_refuse(hass, meter):
     """A value the module holds must reach the page and go back unchanged."""
     entry = await _loaded_with_module(hass, meter, {0x0003: 0})

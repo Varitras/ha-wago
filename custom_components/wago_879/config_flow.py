@@ -427,8 +427,9 @@ class WagoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             serial, error = probed[module.serial_number]
         else:
             serial, error = await probe_serial(self.hass, connection)
-        # Only an answer is kept: a meter that is down, or a module with its
-        # four connections in use, is asked again by the next search.
+        # Only what the meter cannot change is kept: its serial, or that it is
+        # no WAGO 879. A meter that is down, a module with its four connections
+        # in use, or a data type the user can set back is asked again.
         if error is None or error == "unsupported_meter":
             probed[module.serial_number] = serial, error
         if error is not None:

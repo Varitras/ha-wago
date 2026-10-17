@@ -439,5 +439,12 @@
     "old": "    if entry.state is not ConfigEntryState.LOADED:\n        return True\n",
     "new": "",
     "tests": "can_be_deleted"
+  },
+  {
+    "label": "search: a meter refused for its data type is never asked again",
+    "path": "custom_components/wago_879/config_flow.py",
+    "old": "        if error is None or error == \"unsupported_meter\":\n",
+    "new": "        if error is None or error in (\"unsupported_meter\", \"unsupported_data_type\"):\n",
+    "tests": "set_back_to_floats"
   }
 ]

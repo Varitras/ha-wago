@@ -13,13 +13,14 @@ Three groups of registers. The two measured groups each have their own poll
 interval; the identity group is read once, when the entry is set up.
 
 - **Measurements** - per-phase and total voltage, current, frequency, active,
-  reactive and apparent power, power factor.
+  reactive and apparent power, power factor; with them the status words:
+  current quadrant, phase quadrants and power-down counter.
 - **Energy** - total, per-phase and per-tariff (T1-T4) active and reactive
   energy counters, the reactive-only per-quadrant (Q1-Q4) split, and the
   running day counters (total and per phase).
 - **Identity** - serial number, meter code, firmware/hardware version, Modbus
-  unit id, CT ratio (when the meter reports one), rated current, and a few
-  operational counters.
+  unit id, CT ratio (when the meter reports one), rated current, data type
+  and combination code.
 - **Module** - the 879-9000's own settings, read at setup from its Modbus
   unit 255: serial number, firmware and bootloader version, DHCP, address,
   netmask, gateway, DNS and NTP servers, host name, serial port, baud rate,
@@ -146,7 +147,8 @@ System -> Network** (with only the default adapter, that is
   - a module with a meter that is not set up yet appears under **Discovered**
     (only a meter on port 502 and unit id 1; any other is added by hand).
     A meter that answered is not asked again during the same run of Home
-    Assistant; one that did not answer is asked again by the next search;
+    Assistant; one that did not answer, or was refused for its data type,
+    is asked again by the next search;
   - a module that turned up at a new address takes its entry along, once it
     answers there with its own serial number - the entry's host is updated
     and the entry reloaded. An entry set up with a host name keeps it.
@@ -170,8 +172,10 @@ An empty server field means "not set".
   page says so; it uses them after its next restart at the latest.
 - Two pages saved at once are written one after the other.
 - The page appears once a setup has reached the module. A module that
-  misses a request at setup keeps its page and device; one that answers as
-  another device, or with a Modbus exception, is removed with its entities.
+  misses a request at setup keeps its page and device. One that answers as
+  another device, or refuses its version block with the exception "illegal
+  function", "illegal data address" or one of the two gateway exceptions, is
+  removed with its entities.
   A module device the entry no longer reaches can also be deleted from its
   device page.
 
