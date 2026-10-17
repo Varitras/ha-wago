@@ -38,6 +38,21 @@ def _no_real_meter(monkeypatch):
     monkeypatch.setattr(CORE_CONNECTION, _refuse)
 
 
+@pytest.fixture(autouse=True)
+def _no_deprecated_core_calls(caplog):
+    """Core only logs a deprecated call from a custom integration, until the
+    release that turns it into an error."""
+    yield
+    # In teardown `caplog.records` holds only the teardown's own records.
+    deprecated = [
+        record.getMessage()
+        for phase in ("setup", "call")
+        for record in caplog.get_records(phase)
+        if "Detected that custom integration" in record.getMessage()
+    ]
+    assert not deprecated
+
+
 # Where the integration sends its UDP search for modules.
 MODULE_SEARCH = "custom_components.wago_879.discovery.async_browse"
 

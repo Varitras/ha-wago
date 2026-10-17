@@ -9,12 +9,18 @@ pytest.importorskip("pytest_homeassistant_custom_component.common")
 
 from datetime import timedelta
 
-from modbus_connection import ModbusConnectionError, ModbusTcpParams, ModbusTlsParams
+from modbus_connection import (
+    IllegalFunctionError,
+    ModbusConnectionError,
+    ModbusTcpParams,
+    ModbusTlsParams,
+)
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
 
+from custom_components.wago_879 import async_remove_config_entry_device
 from custom_components.wago_879.const import (
     CONF_ENERGY_INTERVAL,
     CONF_HOST,
@@ -563,4 +569,74 @@ async def test_a_replaced_module_leaves_the_entry_with_its_entities(hass, meter)
     assert (
         registry.async_get_entity_id("sensor", DOMAIN, f"{MODULE_SERIAL}_hostname")
         is None
+    )
+
+
+def _module_device(hass, entry, serial=MODULE_SERIAL):
+    return dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, serial), entry.entry_id
+    )
+
+
+async def test_a_module_that_misses_a_read_at_setup_stays_the_entry_s(hass, meter):
+    """One unanswered request says nothing about whether the module is there."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    module = _module_device(hass, entry)
+    meter.fail_module_requests(ModbusConnectionError("timed out"))
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _module_device(hass, entry) is not None
+    meter_device = _module_device(hass, entry, SERIAL)
+    assert meter_device.via_device_id == module.id
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert menu["menu_options"] == ["intervals", "module"]
+
+
+@pytest.mark.parametrize(
+    "gateway",
+    ["refuses unit 255", "is another device on unit 255"],
+)
+async def test_a_gateway_without_the_module_lets_go_of_the_old_one(
+    hass, meter, gateway
+):
+    """Otherwise the old module keeps its entities, the meter its link, and
+    the search takes the old module's serial for this entry and moves it."""
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    if gateway == "refuses unit 255":
+        meter.fail_module_requests(IllegalFunctionError())
+    else:
+        meter.load_module_raw({"holding": {0x0400: 0}})
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _module_device(hass, entry) is None
+    assert _module_device(hass, entry, SERIAL).via_device_id is None
+    assert (
+        er.async_get(hass).async_get_entity_id(
+            "sensor", DOMAIN, f"{MODULE_SERIAL}_hostname"
+        )
+        is None
+    )
+
+
+async def test_only_a_module_the_entry_no_longer_reaches_can_be_deleted(hass, meter):
+    meter.load_module_raw(module_holding())
+    entry = await _setup(hass, _entry(hass))
+    stale = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "033000000009")},
+        model="879-9000",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, stale)
+    assert not await async_remove_config_entry_device(
+        hass, entry, _module_device(hass, entry)
+    )
+    assert not await async_remove_config_entry_device(
+        hass, entry, _module_device(hass, entry, SERIAL)
     )

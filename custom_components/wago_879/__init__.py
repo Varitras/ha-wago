@@ -6,9 +6,17 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from modbus_connection import ModbusError, ModbusTcpParams
+from modbus_connection import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    IllegalDataAddressError,
+    IllegalFunctionError,
+    ModbusError,
+    ModbusTcpParams,
+)
 
 from homeassistant.components.modbus import async_get_unit
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import (
@@ -52,6 +60,14 @@ from .wago_879_api.registers import MODULE_UNIT_ID
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+# Exception responses that answer the question: whoever sits at the address
+# serves no 879-9000 on unit 255. A timeout, a lost link or "busy" leave it open.
+NO_MODULE_ANSWERS = (
+    IllegalFunctionError,
+    IllegalDataAddressError,
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -199,56 +215,57 @@ async def async_setup_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bool
     await energy.async_config_entry_first_refresh()
 
     module_api = WagoModule(async_get_unit(hass, entry, params, MODULE_UNIT_ID))
-    module = await _async_read_module(module_api, host)
+    module, module_device_id = await _async_module(hass, entry, module_api, host)
     entry.runtime_data = WagoRuntimeData(
         serial=serial,
         identity=identity,
         measurements=measurements,
         energy=energy,
         module=module,
-        module_device_id=_register_module(hass, entry, module),
-        module_api=None if module is None else module_api,
+        module_device_id=module_device_id,
+        module_api=None if module_device_id is None else module_api,
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def _async_read_module(
-    module_api: WagoModule, host: str
-) -> dict[str, Any] | None:
-    """The 879-9000's own settings, or None: the meter works without them."""
+async def _async_module(
+    hass: HomeAssistant, entry: WagoConfigEntry, module_api: WagoModule, host: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    """The 879-9000's own settings and its device id; the meter works without.
+
+    Registered ahead of the platforms: the meter links to the module by
+    registry id, which only exists once the device does. A module device the
+    entry no longer reaches is removed with its entities, or the search would
+    keep taking its serial for this entry and move the entry back to it.
+    """
+    devices = dr.async_get(hass)
+    known = [
+        device
+        for device in dr.async_entries_for_config_entry(devices, entry.entry_id)
+        if device.model == MODULE_MODEL
+    ]
     try:
-        return await module_api.async_read()
+        module = await module_api.async_read()
+    except NO_MODULE_ANSWERS:
+        module = None
     except ModbusError as err:
         _LOGGER.debug(
-            "No 879-9000 settings on unit %s: %s",
+            "No answer on unit %s, keeping the module last seen: %s",
             MODULE_UNIT_ID,
             redact(str(err), host),
         )
-        return None
-
-
-def _register_module(
-    hass: HomeAssistant, entry: WagoConfigEntry, module: dict[str, Any] | None
-) -> str | None:
-    """Register the module's device ahead of the platforms.
-
-    The meter links to it by registry id, which only exists once the device
-    does.
-    """
-    if module is None:
-        return None
-    devices = dr.async_get(hass)
-    device = devices.async_get_or_create(
-        config_entry_id=entry.entry_id, **module_device_info(module)
-    )
-    # A module that was replaced stays in the registry otherwise, with its
-    # entities, and the search would keep taking its serial for this entry.
-    for stale in dr.async_entries_for_config_entry(devices, entry.entry_id):
-        if stale.model == MODULE_MODEL and stale.id != device.id:
-            devices.async_update_device(stale.id, remove_config_entry_id=entry.entry_id)
-    return device.id
+        return None, known[0].id if known else None
+    current = None
+    if module is not None:
+        current = devices.async_get_or_create(
+            config_entry_id=entry.entry_id, **module_device_info(module)
+        ).id
+    for device in known:
+        if device.id != current:
+            devices.async_remove_device(device.id)
+    return module, current
 
 
 async def _async_reload(hass: HomeAssistant, entry: WagoConfigEntry) -> None:
@@ -282,3 +299,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: WagoConfigEntry) -> bo
             minor_version=INTERVALS_IN_OPTIONS_MINOR_VERSION,
         )
     return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: WagoConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Only a module the entry no longer reaches may be deleted by hand.
+
+    The meter and the module in use come back with the next setup anyway.
+    """
+    if device.model != MODULE_MODEL:
+        return False
+    if entry.state is not ConfigEntryState.LOADED:
+        return True
+    return device.id != entry.runtime_data.module_device_id
