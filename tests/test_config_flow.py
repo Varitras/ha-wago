@@ -1013,6 +1013,7 @@ async def test_a_module_without_a_host_name_can_still_be_saved(hass, meter):
     del sent["hostname"]
 
     result = await hass.config_entries.options.async_configure(result["flow_id"], sent)
+    await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
