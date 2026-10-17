@@ -25,12 +25,14 @@ from .registers import (
     MODULE_SETTINGS_WORDS,
     MODULE_STORE_COMMAND,
     SERIAL_WORDS,
+    STATUS_FIELDS,
     Energy,
     Identity,
     Measurements,
     ModuleNetwork,
     ModuleSettings,
     ModuleVersion,
+    Status,
 )
 
 SERIAL_HEX_DIGITS = 8
@@ -88,6 +90,7 @@ class WagoMeter:
         """Bind the components to the unit; nothing is read yet."""
         self._identity = Identity(unit)
         self._measurements = Measurements(unit)
+        self._status = Status(unit)
         self._energy = Energy(unit)
         self._serial_number: str | None = None
 
@@ -113,9 +116,16 @@ class WagoMeter:
         return values
 
     async def async_update_measurements(self) -> dict[str, Any]:
-        """Read the 0x5000 block; raises ModbusError on a link problem."""
+        """Read the 0x5000 block and the status words.
+
+        Raises ModbusError on a link problem.
+        """
         await self._measurements.async_update()
-        return _values(self._measurements, MEASUREMENT_FIELDS)
+        await self._status.async_update()
+        return {
+            **_values(self._measurements, MEASUREMENT_FIELDS),
+            **_values(self._status, STATUS_FIELDS),
+        }
 
     async def async_update_energy(self) -> dict[str, Any]:
         """Read the 0x6000 block; raises ModbusError on a link problem."""

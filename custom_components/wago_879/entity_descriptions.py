@@ -33,7 +33,12 @@ from homeassistant.const import (
 )
 
 from .wago_879_api.device import MODULE_SWITCHES, PARITIES, PORTS
-from .wago_879_api.registers import ENERGY_FIELDS, IDENTITY_FIELDS, MEASUREMENT_FIELDS
+from .wago_879_api.registers import (
+    ENERGY_FIELDS,
+    IDENTITY_FIELDS,
+    MEASUREMENT_FIELDS,
+    STATUS_FIELDS,
+)
 
 
 class Block(StrEnum):
@@ -212,13 +217,23 @@ def _identity(field: str) -> WagoSensorDescription:
             "ct_ratio_primary",
             "ct_ratio_secondary",
             "modbus_id",
-            "current_quadrant",
         },
+    )
+
+
+def _status(field: str) -> WagoSensorDescription:
+    return WagoSensorDescription(
+        key=field,
+        translation_key=field,
+        block=Block.MEASUREMENTS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=field == "current_quadrant",
     )
 
 
 SENSOR_DESCRIPTIONS: tuple[WagoSensorDescription, ...] = (
     *(_measurement(f) for f in MEASUREMENT_FIELDS),
+    *(_status(f) for f in STATUS_FIELDS),
     *(_energy(f) for f in ENERGY_FIELDS),
     *(_identity(f) for f in IDENTITY_FIELDS if f not in OMITTED_FIELDS),
 )

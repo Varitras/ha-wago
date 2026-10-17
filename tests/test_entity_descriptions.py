@@ -22,15 +22,17 @@ from custom_components.wago_879.wago_879_api.registers import (
     ENERGY_FIELDS,
     IDENTITY_FIELDS,
     MEASUREMENT_FIELDS,
+    STATUS_FIELDS,
     Energy,
     Identity,
     Measurements,
+    Status,
     address_of,
 )
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import EntityCategory
 
-ALL_FIELDS = {*MEASUREMENT_FIELDS, *ENERGY_FIELDS, *IDENTITY_FIELDS}
+ALL_FIELDS = {*MEASUREMENT_FIELDS, *STATUS_FIELDS, *ENERGY_FIELDS, *IDENTITY_FIELDS}
 DESCRIBED = {d.key for d in SENSOR_DESCRIPTIONS}
 
 # What the YAML block called each sensor, and which field it read.
@@ -84,7 +86,7 @@ def test_no_decision_outlives_its_field():
 
 def test_descriptions_name_the_block_their_field_lives_in():
     by_block = {
-        Block.MEASUREMENTS: set(MEASUREMENT_FIELDS),
+        Block.MEASUREMENTS: {*MEASUREMENT_FIELDS, *STATUS_FIELDS},
         Block.ENERGY: set(ENERGY_FIELDS),
         Block.IDENTITY: set(IDENTITY_FIELDS),
     }
@@ -208,7 +210,7 @@ GREY_ADDRESSES = {
 def _words(field: str) -> set[int]:
     component = next(
         candidate
-        for candidate in (Identity, Measurements, Energy)
+        for candidate in (Identity, Status, Measurements, Energy)
         if field in candidate.declared_fields
     )
     first = address_of(component, field)
@@ -229,7 +231,7 @@ def test_a_sensor_on_a_grey_register_is_created_only_when_the_meter_fills_it():
 
 def test_the_gate_names_a_field_the_setup_has_read():
     """Only identity and measurements are read before the platforms are set up."""
-    read_at_setup = {*IDENTITY_FIELDS, *MEASUREMENT_FIELDS}
+    read_at_setup = {*IDENTITY_FIELDS, *MEASUREMENT_FIELDS, *STATUS_FIELDS}
     for description in SENSOR_DESCRIPTIONS:
         gate = description.populated_when_nonzero
         assert gate is None or gate in read_at_setup, description.key

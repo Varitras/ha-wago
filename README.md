@@ -36,8 +36,10 @@ interval; the identity group is read once, when the entry is set up.
 | Energy: totals and their per-phase splits | enabled | `total`: what they count is set by the meter's combination code - import minus export on the tested meter, so a feed-in surplus makes them fall or go negative; other codes count the sum or one direction only. The code is in the diagnostics download (`combination_code`). Same kWh/kvarh units |
 | Energy: per-tariff (T1-T4) and reactive per-quadrant (Q1-Q4) split counters, day counters (total and per phase) | **disabled by default** | a direct-connected meter without tariff switching holds zero in most of these; enable per entity if needed |
 | Energy: `tariff` (the active tariff word) | enabled, **diagnostic** | |
-| Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
-| Identity: CT ratio, Modbus unit id, current quadrant | enabled, **diagnostic** | |
+| Identity: rated current | **disabled by default**, diagnostic | rarely useful day to day |
+| Identity: CT ratio, Modbus unit id | enabled, **diagnostic** | |
+| Status: power-down counter, phase quadrants | **disabled by default**, diagnostic | polled with the measurements |
+| Status: current quadrant | enabled, **diagnostic** | polled with the measurements |
 
 Voltage average, current average and the CT ratio sit on registers the WAGO
 manual shades grey; a direct-measuring meter leaves them at zero. They are
@@ -219,7 +221,7 @@ what the replaced YAML block used; the identity group is read once at setup
 and has no interval:
 
 - **Measurement interval** - the instantaneous values (voltage, current,
-  power, ...); default 15 seconds.
+  power, ...) and the quadrant and power-down counter; default 15 seconds.
 - **Energy interval** - the energy counters; default 300 seconds.
 
 Both can be changed under **Configure -> Poll intervals**, within 5-3600

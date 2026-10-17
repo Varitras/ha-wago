@@ -418,6 +418,22 @@ async def test_setup_refuses_a_meter_set_to_send_integers(hass, meter):
     assert "data type 2" in entry.reason
 
 
+async def test_a_quadrant_change_after_setup_reaches_its_sensor(hass, meter):
+    """Feed-in moves the meter from quadrant 1 to 2 while it runs."""
+    meter.load_raw({"holding": {0x4017: 1}})
+    await _setup(hass, _entry(hass))
+    quadrant = er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{SERIAL}_current_quadrant"
+    )
+    assert hass.states.get(quadrant).state == "1"
+
+    meter.load_raw({"holding": {0x4017: 2}})
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=16))
+    await hass.async_block_till_done()
+
+    assert hass.states.get(quadrant).state == "2"
+
+
 async def test_the_device_card_shows_the_versions_as_the_meter_means_them(hass, meter):
     """The versions arrive as float32: 1.34 decodes to 1.340000033378601."""
     meter.load_raw(holding({0x4007: 1.34, 0x4009: 1.23}))

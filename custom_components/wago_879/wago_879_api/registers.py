@@ -48,11 +48,6 @@ class Identity(Component):
     # 1 import only, 2 export only, 3 import + export, 4 and 5 import minus
     # export: what every energy register named "total" accumulates.
     combination_code = _number(0x400F)
-    power_down_counter = _number(0x4016)
-    current_quadrant = _number(0x4017)
-    quadrant_l1 = _number(0x4018)
-    quadrant_l2 = _number(0x4019)
-    quadrant_l3 = _number(0x401A)
     # The manual lists "CT ratio" at 0x401F as one two-register field, but its
     # own write command (page 38) sends two words for it:
     #   01 10 401F 0002 04 9995 0005   "Set to 9995/5"
@@ -67,6 +62,21 @@ class Identity(Component):
     ct_ratio_primary = _number(0x401F)
     ct_ratio_secondary = _number(0x4020)
     data_type = _number(0x4026)
+
+
+class Status(Component):
+    """Words amid the identity block that change while the meter runs.
+
+    Polled with the measurements, unlike the settings around them.
+    """
+
+    register_space = "holding"
+
+    power_down_counter = _number(0x4016)
+    current_quadrant = _number(0x4017)
+    quadrant_l1 = _number(0x4018)
+    quadrant_l2 = _number(0x4019)
+    quadrant_l3 = _number(0x401A)
 
 
 class Measurements(Component):
@@ -265,5 +275,6 @@ def address_of(component: type[Component], name: str) -> int:
 
 
 IDENTITY_FIELDS = _field_names(Identity)
+STATUS_FIELDS = _field_names(Status)
 MEASUREMENT_FIELDS = _field_names(Measurements)
 ENERGY_FIELDS = _field_names(Energy)
