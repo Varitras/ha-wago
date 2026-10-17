@@ -84,6 +84,7 @@ OMITTED_FIELDS: frozenset[str] = frozenset(
         "software_version",
         "hardware_version",
         "data_type",
+        "combination_code",
     }
 )
 
@@ -132,10 +133,12 @@ def _is_directed(field: str) -> bool:
     """Whether the register counts in one direction only.
 
     Import, export and the four quadrants each accumulate their own share and
-    only ever rise. Every other energy register holds import minus export -
-    measured on a meter: reactive_energy_total -1206.637 against import 652.664
-    and export 1859.300 - so it falls, goes negative, and is not a rising
-    counter however much its name says "total".
+    only ever rise. What every other energy register holds is set by the
+    meter's combination code: import minus export as the meter this was
+    measured on keeps it - reactive_energy_total -1206.637 against import
+    652.664 and export 1859.300 - so it falls, goes negative, and is not a
+    rising counter however much its name says "total". The other codes make it
+    a sum or one direction only, which `TOTAL` describes just as well.
     """
     return (
         "import" in field

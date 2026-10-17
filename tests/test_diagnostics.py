@@ -26,6 +26,7 @@ def _enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture(autouse=True)
 def meter(mock_modbus):
     mock_modbus.load_raw(holding({0x5002: 230.5, 0x6000: 1234.5}))
+    mock_modbus.load_raw({"holding": {0x400F: 4}})
     return mock_modbus
 
 
@@ -38,6 +39,8 @@ async def test_diagnostics_carry_the_readings_without_address_or_serial(hass):
 
     assert diagnostics["measurements"]["data"]["voltage_l1"] == pytest.approx(230.5)
     assert diagnostics["energy"]["data"]["active_energy_total"] == pytest.approx(1234.5)
+    # What the meter's totals hold - import minus export, a sum, or one side.
+    assert diagnostics["identity"]["combination_code"] == 4
     assert diagnostics["measurements"]["last_update_success"] is True
     assert BASE_DATA[CONF_HOST] not in text
     assert SERIAL not in text

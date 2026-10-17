@@ -81,6 +81,7 @@ IDENTITY_MANUAL_ADDRESSES = {
     "software_version": 0x4007,
     "hardware_version": 0x4009,
     "meter_amperes": 0x400B,
+    "combination_code": 0x400F,
     "power_down_counter": 0x4016,
     "current_quadrant": 0x4017,
     "quadrant_l1": 0x4018,

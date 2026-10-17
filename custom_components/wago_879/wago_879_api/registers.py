@@ -45,6 +45,9 @@ class Identity(Component):
     software_version = _float(0x4007)
     hardware_version = _float(0x4009)
     meter_amperes = _number(0x400B)
+    # 1 import only, 2 export only, 3 import + export, 4 and 5 import minus
+    # export: what every energy register named "total" accumulates.
+    combination_code = _number(0x400F)
     power_down_counter = _number(0x4016)
     current_quadrant = _number(0x4017)
     quadrant_l1 = _number(0x4018)

@@ -33,7 +33,7 @@ interval; the identity group is read once, when the entry is set up.
 |---|---|---|
 | Measurements (voltage, current, frequency, power, power factor) | enabled | regular sensors |
 | Energy: import and export counters and their per-phase splits | enabled | `total_increasing`, kept in kWh/kvarh to match the statistics already recorded by the replaced YAML setup |
-| Energy: netted totals (import minus export) and their per-phase splits | enabled | `total`, because a feed-in surplus makes them fall or go negative; same kWh/kvarh units |
+| Energy: totals and their per-phase splits | enabled | `total`: what they count is set by the meter's combination code - import minus export on the tested meter, so a feed-in surplus makes them fall or go negative; other codes count the sum or one direction only. The code is in the diagnostics download (`combination_code`). Same kWh/kvarh units |
 | Energy: per-tariff (T1-T4) and reactive per-quadrant (Q1-Q4) split counters, day counters (total and per phase) | **disabled by default** | a direct-connected meter without tariff switching holds zero in most of these; enable per entity if needed |
 | Energy: `tariff` (the active tariff word) | enabled, **diagnostic** | |
 | Identity: rated current, power-down counter, phase quadrants | **disabled by default**, diagnostic | rarely useful day to day |
@@ -68,8 +68,9 @@ read at setup but not surfaced.
 ## Use cases
 
 - **Energy dashboard** - use *Active energy import* as grid consumption and
-  *Active energy export* as return to grid. The netted *Active energy total*
-  can fall, so it is not the right source for the dashboard.
+  *Active energy export* as return to grid. *Active energy total* follows
+  the meter's combination code and can fall, so it is not the right source
+  for the dashboard.
 - **Phase balance** - compare current and active power per phase to spot a
   phase that carries most of the load.
 - **Supply quality** - watch the phase and line voltages and the frequency,
