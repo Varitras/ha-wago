@@ -195,6 +195,117 @@ def test_the_translation_scan_catches_the_shapes_it_was_written_for():
     )
 
 
+# Which strings.json section a flow class's messages live in.
+FLOW_SECTIONS = {"WagoConfigFlow": "config", "WagoOptionsFlow": "options"}
+
+
+def _text(node: ast.expr, constants: dict[str, str]) -> str | None:
+    """A literal, or a module constant holding one; None for anything else."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
+
+
+def _constants(tree: ast.Module) -> dict[str, str]:
+    return {
+        target.id: node.value.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def _flow_messages_in(node: ast.AST, constants: dict[str, str]):
+    """(kind, key) for every abort reason and form error `node` names."""
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call) and getattr(child.func, "attr", "") == (
+            "async_abort"
+        ):
+            for keyword in child.keywords:
+                if keyword.arg == "reason" and _text(keyword.value, constants):
+                    yield "abort", _text(keyword.value, constants)
+        if isinstance(child, ast.Dict):
+            for key, value in zip(child.keys, child.values, strict=True):
+                is_base = isinstance(key, ast.Constant) and key.value == "base"
+                if is_base and _text(value, constants):
+                    yield "error", _text(value, constants)
+        if isinstance(child, ast.Assign):
+            target = child.targets[0]
+            is_base = (
+                isinstance(target, ast.Subscript)
+                and isinstance(target.slice, ast.Constant)
+                and target.slice.value == "base"
+            )
+            if is_base and _text(child.value, constants):
+                yield "error", _text(child.value, constants)
+
+
+def _flow_messages(flow_source: str, settings_source: str):
+    """(section, kind, key) for every message a flow can show.
+
+    A probe's error is shown as a form error and, in the search's flow, as
+    the abort reason; the module settings' refusals are module page errors.
+    """
+    tree = ast.parse(flow_source)
+    constants = _constants(tree)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name in FLOW_SECTIONS:
+            for kind, key in _flow_messages_in(node, constants):
+                yield FLOW_SECTIONS[node.name], kind, key
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "probe_serial":
+            for child in ast.walk(node):
+                if isinstance(child, ast.Return) and isinstance(child.value, ast.Tuple):
+                    key = _text(child.value.elts[-1], constants)
+                    if key:
+                        yield "config", "error", key
+                        yield "config", "abort", key
+    for child in ast.walk(ast.parse(settings_source)):
+        if isinstance(child, ast.Call) and getattr(child.func, "id", "") == "_Refused":
+            yield "options", "error", child.args[0].value
+
+
+def _package_flow_messages():
+    return set(
+        _flow_messages(
+            (PACKAGE / "config_flow.py").read_text(encoding="utf-8"),
+            (PACKAGE / "module_settings.py").read_text(encoding="utf-8"),
+        )
+    )
+
+
+@pytest.mark.parametrize("language", LANGUAGES, ids=lambda p: p.stem)
+def test_every_flow_error_and_abort_reason_has_a_text(language):
+    """A key missing from every file at once passes the parity checks above;
+    the frontend then shows the bare key."""
+    strings = _load(language)
+    missing = [
+        f"{section}.{kind}.{key}"
+        for section, kind, key in sorted(_package_flow_messages())
+        if key not in strings[section].get(kind, {})
+    ]
+    assert not missing, f"{language.name}: {missing}"
+
+
+def test_the_flow_message_scan_finds_every_shape_it_reads():
+    found = _package_flow_messages()
+
+    assert {
+        ("config", "abort", "entry_changed"),
+        ("options", "abort", "module_not_applied"),
+        ("config", "error", "invalid_host"),
+        ("config", "error", "not_a_whole_number"),
+        ("options", "error", "module_write_failed"),
+        ("options", "error", "invalid_timeout"),
+        ("config", "error", "unsupported_data_type"),
+        ("config", "abort", "unsupported_data_type"),
+    } <= found
+
+
 def test_every_sensor_without_a_device_class_has_an_icon():
     """The quality scale's icon-translations rule: a device class brings its
     own icon, everything else needs one in icons.json - and icons.json may not
